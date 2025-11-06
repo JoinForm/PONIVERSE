@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PONIVERSE</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/x-icon" href="image/icon/favicon.ico" />
+</head>
+
+<body class="dark-grad">
+  <header class="hero">
+    <h1 class="title-animate" id="titleText">PONIVERSE</h1>
+    <p class="subtitle">포니버스에 오신 것을 환영합니다</p>
+    <p class="mini-counts">
+      캠핑 <span id="c1">0</span><span id="d1">/20</span> ·
+      보드게임 <span id="c2">0</span><span id="d2">/20</span> ·
+      운동 <span id="c3">0</span><span id="d3">/20</span>
+    </p>
+
+    <!-- 링크형 버튼 -->
+    <div class="btn-row">
+      <a href="signup.html" class="btn">회원가입</a>
+      <a href="login.html"  class="btn ghost">로그인</a>
+    </div>
+  </header>
+
+  <!-- 로그인 후 안내 배너 -->
+  <div id="groupsNotice" class="groups-warning" aria-hidden="true"></div>
+
+  <!-- 로그인 후 모임 카드 컨테이너 -->
+  <section id="groups" class="groups" aria-hidden="true"></section>
+
+  <!-- 갤러리 -->
+  <section class="gallery" id="gallery"></section>
+
+  <!-- 페이지 하단 우측 버튼 (초기 숨김) -->
+  <div class="page-actions" aria-hidden="true">
+    <button id="withdrawBtn" class="withdraw-btn">회원 탈퇴</button>
+  </div>
+
+  <!-- 이미지 확대 모달 -->
+  <div id="imgModal" class="modal" hidden>
+    <div class="modal-body">
+      <button class="modal-close" data-close="imgModal" aria-label="닫기">×</button>
+      <img id="modalImg" src="" alt="" />
+    </div>
+  </div>
+
+  <!-- 토스트 -->
+  <div class="toast" id="toast" aria-live="polite"></div>
+
+  <!-- 기존 동작 스크립트 (갤러리/그룹/가드 등) -->
+  <script type="module" src="js/app.js"></script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
+    import {
+      getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence
+    } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
+    import {
+      getFirestore, doc, getDoc, updateDoc, serverTimestamp,
+      collection, query, where, getCountFromServer
+    } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
+
+    // ... firebaseConfig / app / auth / db / setPersistence (기존 그대로)
+
+    const LIMIT = 20;
+    const c1 = document.getElementById("c1"); // 캠핑
+    const c2 = document.getElementById("c2"); // 보드게임
+    const c3 = document.getElementById("c3"); // 운동
+
+    async function refreshCounts(){
+      try{
+        const usersRef = collection(getFirestore(), "users");
+        const [camp, board, sport] = await Promise.all([
+          getCountFromServer(query(usersRef, where("groups.camping",   "==", true))),
+          getCountFromServer(query(usersRef, where("groups.boardgame", "==", true))),
+          getCountFromServer(query(usersRef, where("groups.sports",    "==", true))),
+        ]).then(res => res.map(s => s.data().count || 0));
+
+        if(c1){ c1.textContent = String(Math.min(camp,  LIMIT));  c1.style.color = camp  >= LIMIT ? "#ff4d4d" : "#66d1ff"; }
+        if(c2){ c2.textContent = String(Math.min(board, LIMIT));  c2.style.color = board >= LIMIT ? "#ff4d4d" : "#66d1ff"; }
+        if(c3){ c3.textContent = String(Math.min(sport, LIMIT));  c3.style.color = sport >= LIMIT ? "#ff4d4d" : "#66d1ff"; }
+      }catch(err){
+        console.error("[refreshCounts]", err);
+      }
+    }
+    window.refreshCounts = refreshCounts; // 필요 시 외부에서 호출 가능
+
+    // ✅ ➊ 페이지 로드 때마다 (새로고침/첫 진입 포함)
+    document.addEventListener("DOMContentLoaded", refreshCounts);
+
+    // ✅ ➋ 로그인 상태 변할 때도 (로그인/로그아웃 직후)
+    onAuthStateChanged(getAuth(), async (user)=>{
+      // ... (기존 인삿말/렌더 코드 유지)
+      refreshCounts();
+    });
+
+    // ✅ ➌ 탭이 다시 활성화되었을 때(뒤로가기/다른 탭 전환 후 복귀)
+    document.addEventListener("visibilitychange", ()=>{
+      if(document.visibilityState === "visible") refreshCounts();
+    });
+
+    // ✅ ➍ 네트워크가 다시 연결됐을 때
+    window.addEventListener("online", refreshCounts);
+
+    // 🔁 모임 토글(DB 업데이트 후 카운트 재집계)
+    const map = { camp:"camping", board:"boardgame", sport:"sports", free:"free" };
+    window.toggleGroup = async function(key, join){
+      const user = getAuth().currentUser;
+      if(!user) return;
+      const field = map[key];
+      if(!field) return;
+
+      await updateDoc(doc(getFirestore(),"users",user.uid), {
+        [`groups.${field}`]: !!join,
+        updatedAt: serverTimestamp(),
+      });
+
+      // 업데이트 후 최신 카운트 반영
+      refreshCounts();
+    };
+    
+  </script>
+
+
+
+
+
+</body>
+</html>
