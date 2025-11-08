@@ -46,7 +46,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
     import {
-      getAuth, signInWithEmailAndPassword,
+      getAuth, signInWithEmailAndPassword, onAuthStateChanged,
       setPersistence, browserLocalPersistence
     } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 
@@ -60,40 +60,52 @@
       measurementId: "G-GFRG38YKVW"
     };
 
-    const app=initializeApp(firebaseConfig);
-    const auth=getAuth(app);
-    await setPersistence(auth,browserLocalPersistence);
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    await setPersistence(auth, browserLocalPersistence);
 
-    function normalizePhone(r){return (r||"").replace(/\D/g,"");}
+    // 이미 로그인 중이면 바로 홈으로
+    onAuthStateChanged(auth, (user) => {
+      if (user) location.href = "home.html";
+    });
+
+    // 연락처 포맷
+    function normalizePhone(r){ return (r||"").replace(/\D/g,""); }
     function formatPhone(r){
-      const d=normalizePhone(r);
+      const d = normalizePhone(r);
       if(d.startsWith("02")) return d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*/,(_,a,b,c)=>[a,b,c].filter(Boolean).join("-"));
       return d.replace(/^(\d{0,3})(\d{0,4})(\d{0,4}).*/,(_,a,b,c)=>[a,b,c].filter(Boolean).join("-"));
     }
-    const phoneInput=document.querySelector('input[name="phone"]');
-    if(phoneInput) phoneInput.addEventListener("input",()=>phoneInput.value=formatPhone(phoneInput.value));
+    const phoneInput = document.querySelector('input[name="phone"]');
+    if (phoneInput) phoneInput.addEventListener("input", () => phoneInput.value = formatPhone(phoneInput.value));
 
-    function makeFakeEmail(name,phone){
-      const clean=name.replace(/\s+/g,"").replace(/[^ㄱ-ㅎ가-힣a-zA-Z0-9]/g,"");
-      const digits=normalizePhone(phone);
+    // 가입 시 사용한 가짜 이메일 규칙
+    function makeFakeEmail(name, phone){
+      const clean  = name.replace(/\s+/g,"").replace(/[^ㄱ-ㅎ가-힣a-zA-Z0-9]/g,"");
+      const digits = normalizePhone(phone);
       return `${clean}.${digits}@poniverse.kr`;
     }
 
-    document.getElementById("cancelBtn").addEventListener("click",()=>location.href="index.html");
+    document.getElementById("cancelBtn").addEventListener("click", () => location.href = "index.html");
 
-    const form=document.getElementById("loginForm");
-    form.addEventListener("submit",async e=>{
+    const form = document.getElementById("loginForm");
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const name=form.username.value.trim();
-      const pw=form.password.value;
-      const phone=normalizePhone(form.phone.value.trim());
-      if(!name||!pw||!phone){alert("아이디, 연락처, 비밀번호를 모두 입력하세요.");return;}
-      if(!(phone.length===10||phone.length===11)){alert("연락처는 10~11자리로 입력하세요.");return;}
+      const name  = form.username.value.trim();
+      const pw    = form.password.value;
+      const phone = normalizePhone(form.phone.value.trim());
+
+      if(!name || !pw || !phone){ alert("아이디, 연락처, 비밀번호를 모두 입력하세요."); return; }
+      if(!(phone.length===10 || phone.length===11)){ alert("연락처는 10~11자리로 입력하세요."); return; }
 
       try{
-        await signInWithEmailAndPassword(auth,makeFakeEmail(name,phone),pw);
-        alert("로그인 성공!");location.href="index.html";
-      }catch(e){console.error(e);alert("로그인 실패. 입력값을 확인하세요.");}
+        await signInWithEmailAndPassword(auth, makeFakeEmail(name, phone), pw);
+        alert("로그인 성공! 홈으로 이동합니다.");
+        location.href = "home.html"; // ✅ 성공 후 홈으로 이동
+      }catch(e){
+        console.error(e);
+        alert("로그인 실패. 입력값을 확인하세요.");
+      }
     });
   </script>
 </body>

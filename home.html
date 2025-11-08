@@ -12,27 +12,36 @@
 </head>
 
 <body class="dark-grad" data-auth="out">
-  <!-- Hero (로그아웃 표시 전용) -->
+  <!-- Hero -->
   <header class="hero">
     <h1 class="title-animate" id="titleText">PONIVERSE</h1>
+    <!-- 로그인 후 home.js에서 사용자 이름으로 교체 -->
     <p class="subtitle">포니버스에 오신 것을 환영합니다</p>
 
-    <!-- 모임 카운트(비로그인도 표시) -->
+    <!-- 상단 미니 카운트 (로그인 후에도 유지 표시) -->
     <p class="mini-counts" aria-live="polite">
       캠핑 <span id="c1">0</span><span id="d1">/20</span> ·
       보드게임 <span id="c2">0</span><span id="d2">/20</span> ·
       운동 <span id="c3">0</span><span id="d3">/20</span>
     </p>
 
-    <!-- 링크형 버튼 (로그아웃 상태 전용) -->
-    <div class="btn-row">
-      <a href="signup.html" class="btn">회원가입</a>
-      <a href="login.html"  class="btn ghost">로그인</a>
-    </div>
+    <!-- 로그인 후 버튼 영역: home.js가 공지/로그아웃 버튼으로 채움 -->
+    <div class="btn-row"></div>
   </header>
 
-  <!-- 갤러리 (로그인과 무관, 공개) -->
+  <!-- 로그인 후 안내 배너 -->
+  <div id="groupsNotice" class="groups-warning" aria-hidden="true"></div>
+
+  <!-- 로그인 후 모임 카드 컨테이너 -->
+  <section id="groups" class="groups" aria-hidden="true"></section>
+
+  <!-- 갤러리 (로그인 상태에서도 동일 노출) -->
   <section class="gallery" id="gallery" aria-label="사진 갤러리"></section>
+
+  <!-- 페이지 하단 우측 버튼 (회원 탈퇴) -->
+  <div class="page-actions" aria-hidden="true">
+    <button id="withdrawBtn" class="withdraw-btn" type="button">회원 탈퇴</button>
+  </div>
 
   <!-- 이미지 확대 모달 -->
   <div id="imgModal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true">
@@ -45,22 +54,7 @@
   <!-- 토스트 -->
   <div class="toast" id="toast" aria-live="polite"></div>
 
-  <!-- 로그아웃 전용 스크립트: 카운트/갤러리만 -->
-  <script type="module" src="js/index.js"></script>
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
-    import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence }
-      from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
-
-    const app = initializeApp({
-      apiKey:"AIzaSyAfs8ZN-2ANX0lYvT_WVcOMXRkNB5usuRw",
-      authDomain:"poniverse-3c351.firebaseapp.com",
-      projectId:"poniverse-3c351"
-    });
-    const auth = getAuth(app);
-    await setPersistence(auth, browserLocalPersistence);
-    onAuthStateChanged(auth, (user)=>{ if(user) location.href = "home.html"; });
-  </script>
-
+  <!-- 로그인 전용 스크립트: 공지/로그아웃/모임카드/탈퇴/카운트/갤러리 -->
+  <script type="module" src="js/home.js"></script>
 </body>
 </html>
