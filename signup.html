@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="css/styles.css" />
   <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/x-icon" href="image/icon/favicon.ico" />
+
+  <!-- 페이지 전용 여백(모바일 최적화 포함) -->
   <style>
     .signup-page .hero { padding: 120px 16px 48px; }
     @media (max-width: 600px){ .signup-page .hero { padding: 96px 12px 36px; } }
@@ -15,22 +17,72 @@
 </head>
 
 <body class="dark-grad signup-page">
+  <!-- 헤더 -->
   <header class="hero">
     <h1 class="title-animate">PONIVERSE</h1>
     <p class="subtitle">회원가입</p>
   </header>
 
+  <!-- 본문 -->
   <section style="display:flex;justify-content:center;margin:0 auto 80px; padding:0 16px;">
-    <div class="modal-dialog" style="max-width:620px;width:min(92vw,620px);">
+    <div class="modal-dialog" style="max-width:640px;width:min(92vw,640px);">
       <div class="modal-header">
         <h2>회원가입</h2>
       </div>
 
-      <form id="signupForm" class="modal-body">
-        <label>이름(아이디)
-          <input type="text" name="username" required placeholder="아이디를 입력하세요" />
+      <!-- 회원가입 폼 -->
+      <form id="signupForm" class="modal-body" novalidate>
+        <!-- 아이디: 가짜 이메일의 로컬파트로 사용 (ex: user123@poniverse.kr) -->
+        <label>아이디
+          <input
+            type="text"
+            name="userId"
+            required
+            placeholder="영문/숫자/언더스코어 4~20자"
+            minlength="4"
+            maxlength="20"
+            pattern="^[A-Za-z0-9_]{4,20}$"
+            autocomplete="username"
+            inputmode="latin"
+          />
         </label>
 
+        <!-- 비밀번호 -->
+        <label>비밀번호
+          <input
+            type="password"
+            name="password"
+            required
+            minlength="6"
+            placeholder="비밀번호 (6자 이상, 문자 포함)"
+            autocomplete="new-password"
+          />
+        </label>
+
+        <!-- 비밀번호 확인 -->
+        <label>비밀번호 확인
+          <input
+            type="password"
+            name="passwordConfirm"
+            required
+            minlength="6"
+            placeholder="비밀번호 확인"
+            autocomplete="new-password"
+          />
+        </label>
+
+        <!-- 이름(표시용) -->
+        <label>이름
+          <input
+            type="text"
+            name="username"
+            required
+            placeholder="이름(표시될 이름)"
+            autocomplete="name"
+          />
+        </label>
+
+        <!-- 성별 -->
         <label>성별
           <select name="gender" required>
             <option value="" selected disabled>선택</option>
@@ -39,28 +91,38 @@
           </select>
         </label>
 
-        <label>비밀번호
-          <input type="password" name="password" required minlength="6" placeholder="비밀번호 (6자 이상)" />
-        </label>
-
-        <label>비밀번호 확인
-          <input type="password" name="passwordConfirm" required minlength="6" placeholder="비밀번호 확인" />
-        </label>
-
+        <!-- 출생년도 -->
         <label>나이(년도)
           <select name="birthYear" required>
             <option value="" selected disabled>선택</option>
+            <!-- js/signup-year.js 가 채워 넣음 -->
           </select>
         </label>
 
+        <!-- 연락처 -->
         <label>연락처
-          <input type="tel" name="phone" required placeholder="예: 010-1234-5678" inputmode="numeric" />
+          <input
+            type="tel"
+            name="phone"
+            required
+            placeholder="예: 010-1234-5678"
+            inputmode="numeric"
+            autocomplete="tel"
+          />
         </label>
 
+        <!-- 지역 -->
         <label>지역
-          <input type="text" name="region" required placeholder="예: 포항 해도동" />
+          <input
+            type="text"
+            name="region"
+            required
+            placeholder="예: 포항 해도동"
+            autocomplete="address-level2"
+          />
         </label>
 
+        <!-- 전송/취소 -->
         <div class="modal-actions">
           <button type="submit" class="btn primary">가입하기</button>
           <button type="button" class="btn ghost" id="cancelBtn">취소</button>
@@ -69,77 +131,22 @@
     </div>
   </section>
 
+  <!-- 연도 드롭다운 채우기 -->
   <script src="js/signup-year.js" defer></script>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
-    import {
-      getAuth, createUserWithEmailAndPassword, updateProfile,
-      setPersistence, browserLocalPersistence
-    } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, serverTimestamp } 
-      from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
+  <!-- 회원가입 처리 로직 (아이디 → 가짜 이메일 생성 포함) -->
+  <script type="module" src="js/auth-signup.js"></script>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyAfs8ZN-2ANX0lYvT_WVcOMXRkNB5usuRw",
-      authDomain: "poniverse-3c351.firebaseapp.com",
-      projectId: "poniverse-3c351",
-      storageBucket: "poniverse-3c351.appspot.com",
-      messagingSenderId: "608146456053",
-      appId: "1:608146456053:web:711de65e21a2e54a6574bc",
-      measurementId: "G-GFRG38YKVW"
-    };
-
-    const app  = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db   = getFirestore(app);
-    await setPersistence(auth, browserLocalPersistence);
-
-    // 연락처 자동 하이픈
-    function normalizePhone(r){ return (r||"").replace(/\D/g,""); }
-    function formatPhone(r){
-      const d=normalizePhone(r);
-      if(d.startsWith("02")) return d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*/,(_,a,b,c)=>[a,b,c].filter(Boolean).join("-"));
-      return d.replace(/^(\d{0,3})(\d{0,4})(\d{0,4}).*/,(_,a,b,c)=>[a,b,c].filter(Boolean).join("-"));
-    }
-    const phoneInput=document.querySelector('input[name="phone"]');
-    if(phoneInput) phoneInput.addEventListener("input",()=>phoneInput.value=formatPhone(phoneInput.value));
-
-    function makeFakeEmail(name,phone){
-      const clean=name.replace(/\s+/g,"").replace(/[^ㄱ-ㅎ가-힣a-zA-Z0-9]/g,"");
-      const digits=normalizePhone(phone);
-      return `${clean}.${digits}@poniverse.kr`;
-    }
-
-    document.getElementById("cancelBtn").addEventListener("click",()=>location.href="index.html");
-
-    const form=document.getElementById("signupForm");
-    form.addEventListener("submit",async e=>{
-      e.preventDefault();
-      const name=form.username.value.trim();
-      const gender=form.gender.value;
-      const pw=form.password.value;
-      const pw2=form.passwordConfirm.value;
-      const birth=form.birthYear.value;
-      const region=form.region.value.trim();
-      const phoneRaw=form.phone.value.trim();
-      const phone=normalizePhone(phoneRaw);
-
-      if(!name||!gender||!pw||!pw2||!birth||!region||!phone){alert("모든 항목을 입력하세요.");return;}
-      if(pw!==pw2){alert("비밀번호가 일치하지 않습니다.");return;}
-      if(!(phone.length===10||phone.length===11)){alert("연락처는 10~11자리로 입력하세요.");return;}
-
-      const fakeEmail=makeFakeEmail(name,phone);
-      const cred=await createUserWithEmailAndPassword(auth,fakeEmail,pw);
-      await updateProfile(cred.user,{displayName:name});
-      await setDoc(doc(db,"users",cred.user.uid),{
-        uid:cred.user.uid,name,email:fakeEmail,gender,birthYear:birth,region,phone,
-        role:"member",
-        groups:{camp:false,board:false,sport:false,free:false},
-        attendance:{camp:false,board:false,sport:false,free:false},
-        createdAt:serverTimestamp(),updatedAt:serverTimestamp()
-      });
-      alert("회원가입 완료!");location.href="index.html";
+  <!-- 취소 버튼 기본 동작 (홈 또는 인덱스로 이동) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const cancelBtn = document.getElementById('cancelBtn');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+          // 프로젝트에 맞게 경로 조정: index.html 또는 home.html
+          location.href = 'index.html';
+        });
+      }
     });
   </script>
 </body>

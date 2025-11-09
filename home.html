@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PONIVERSE</title>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/x-icon" href="image/icon/favicon.ico" />
+</head>
+
+<body class="dark-grad" data-auth="out">
+  <!-- Hero -->
+  <header class="hero">
+    <h1 class="title-animate" id="titleText">PONIVERSE</h1>
+    <!-- 로그인 후 home.js에서 사용자 이름으로 교체 -->
+    <p class="subtitle">포니버스에 오신 것을 환영합니다</p>
+
+    <!-- 상단 미니 카운트 (로그인 후에도 유지 표시) -->
+    <p class="mini-counts" aria-live="polite">
+      캠핑 <span id="c1">0</span><span id="d1">/20</span> ·
+      보드게임 <span id="c2">0</span><span id="d2">/20</span> ·
+      운동 <span id="c3">0</span><span id="d3">/20</span>
+    </p>
+
+    <!-- 로그인 후 버튼 영역: home.js가 공지/로그아웃 버튼으로 채움 -->
+    <div class="btn-row"></div>
+  </header>
+
+  <!-- 로그인 후 안내 배너 -->
+  <div id="groupsNotice" class="groups-warning" aria-hidden="true"></div>
+
+  <!-- 로그인 후 모임 카드 컨테이너 -->
+  <section id="groups" class="groups" aria-hidden="true"></section>
+
+  <!-- 갤러리 (로그인 상태에서도 동일 노출) -->
+  <section class="gallery" id="gallery" aria-label="사진 갤러리"></section>
+
+  <!-- 페이지 하단 우측 버튼 (회원 탈퇴) -->
+  <div class="page-actions" aria-hidden="true">
+    <button id="withdrawBtn" class="withdraw-btn" type="button">회원 탈퇴</button>
+  </div>
+
+  <!-- 이미지 확대 모달 -->
+  <div id="imgModal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-body">
+      <button class="modal-close" data-close="imgModal" aria-label="닫기" type="button">×</button>
+      <img id="modalImg" src="" alt="확대 이미지" />
+    </div>
+  </div>
+
+  <!-- 토스트 -->
+  <div class="toast" id="toast" aria-live="polite"></div>
+
+  <!-- 로그인 전용 스크립트: 공지/로그아웃/모임카드/탈퇴/카운트/갤러리 -->
+  <script type="module" src="js/home.js"></script>
+</body>
+</html>
