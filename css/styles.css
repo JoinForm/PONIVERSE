@@ -335,3 +335,68 @@ h1 { font-size: clamp(40px, 10vw, 130px); }
 @media (prefers-reduced-motion: reduce){
   * { animation:none !important; transition:none !important; }
 }
+
+/* 열 폭 (아이디/이름/성별 좁힘, 출석 4칸 동일폭) */
+col.col-id      { width: 100px; }
+col.col-name    { width: 80px; }
+col.col-gy      { width: 80px; }
+col.col-phone   { width: 120px; }
+col.col-region  { width: 120px; }
+col.col-role    { width: 100px; }
+col.col-att     { width: 96px; }  /* 캠핑/보드게임/운동/자유 */
+col.col-created { width: 110px; }
+col.col-ops     { width: 110px; }
+
+/* 헤더 셀은 말줄임/클립 해제(특히 2행 보조 헤더) */
+table.admin thead th { overflow: visible; text-overflow: clip; }
+
+/* 보조 헤더 줄맞춤 유지 */
+table.admin thead tr.group-head th { white-space: nowrap; }
+
+/* ====== ▼ 회원관리 테이블 전용 보강 ▼ ====== */
+table.admin{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  table-layout:fixed;               /* colgroup 폭 고정 */
+}
+table.admin th,
+table.admin td{
+  padding:10px 8px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  font-size:14px;
+  text-align:center;                /* 모두 중앙정렬 */
+  vertical-align:middle;
+  background:rgba(255,255,255,.04);
+  white-space:nowrap;               /* 줄바꿈 방지 */
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+/* 멀티 헤더(2행) 경계선 일치 */
+table.admin thead tr:first-child th{
+  background:rgba(255,255,255,.08);
+  border-bottom:0;
+}
+table.admin thead tr.group-head th{
+  background:rgba(255,255,255,.08);
+  border-top:1px solid rgba(255,255,255,.12);
+  border-bottom:1px solid rgba(255,255,255,.08);
+  border-left:0; border-right:0;
+}
+/* sticky 사용 안 함(엇갈림 방지) */
+table.admin thead th{ position:static; }
+
+/* master가 아니면: 연락처/권한 열 자체 숨김 */
+body.non-master th.col-phone,
+body.non-master td.col-phone,
+body.non-master col.col-phone,
+body.non-master th.col-role,
+body.non-master td.col-role,
+body.non-master col.col-role { display:none; }
+
+/* 위험 버튼 */
+.btn.danger{ background:#7d1f2b; border:1px solid rgba(255,120,140,.55); color:#fff; }
+
+.page-header{
+  margin: 24px 0 18px !important; /* 상단 24px, 하단 18px 정도 여유 */
+}

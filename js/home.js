@@ -151,11 +151,8 @@ function refreshCountsDebounced(opts){
   clearTimeout(__refreshTimer);
   __refreshTimer = setTimeout(()=>refreshCounts(opts), 60);
 }
-
 document.addEventListener("DOMContentLoaded", ()=> refreshCounts());
-document.addEventListener("visibilitychange", ()=>{
-  if(document.visibilityState==="visible") refreshCountsDebounced();
-});
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") refreshCountsDebounced(); });
 window.addEventListener("online", ()=> refreshCountsDebounced());
 
 /* =========================
@@ -173,22 +170,18 @@ function groupsToSet(groups){
 }
 
 /* =========================
-   그룹 카드 버튼 바인딩 (중복 방지)
+   그룹 카드 버튼 바인딩
    ========================= */
 function bindGroupButtons(){
   const groupsEl = document.getElementById("groups");
   if(!groupsEl) return;
 
-  // 참가/탈퇴/이동하기 버튼
   groupsEl.querySelectorAll(".group-btn").forEach(btn=>{
-    if (btn._bound) return;      // ✅ 한 번만 바인딩
-    btn._bound = true;
-
     btn.addEventListener("click", async (e)=>{
-      // 링크형 버튼(이동하기) — 기본 동작을 막고 openLink만 사용
+      // 링크형 버튼(이동하기) — 기본 동작을 막고 openLink만 사용 (중복 오픈 방지)
       if(btn.matches("a.group-btn")){
-        e.preventDefault();            // ✅ 새 창 2개 방지(기본 이동 차단)
-        e.stopPropagation();           // ✅ 이벤트 전파 차단
+        e.preventDefault();
+        e.stopPropagation();
         const link = btn.getAttribute("href");
         if(link && link !== "#") openLink(link, { newTab:true });
         return;
@@ -278,7 +271,7 @@ function bindGroupButtons(){
         notify(`${title}에서 탈퇴했습니다.`);
       }
 
-      // 새로 생긴 버튼에 다시 바인딩 (한 번만)
+      // 새로 생긴 버튼에 다시 바인딩
       bindGroupButtons();
 
       // ===== DB 반영 + 카운트 옵티미스틱 + (참가 시) 링크 오픈
@@ -303,12 +296,9 @@ function bindGroupButtons(){
 
   // 썸네일 클릭도 기본 동작 막고 openLink만 사용 (중복 오픈 방지)
   document.querySelectorAll(".group-card > a").forEach(a=>{
-    if (a._bound) return;     // ✅ 한 번만 바인딩
-    a._bound = true;
-
     a.addEventListener("click", (e)=>{
-      e.preventDefault();    // ✅ 기본 이동 차단
-      e.stopPropagation();   // ✅ 전파 차단
+      e.preventDefault();
+      e.stopPropagation();
       const link = a.getAttribute("href");
       if(link && link !== "#") openLink(link, { newTab:true });
     });
@@ -316,7 +306,7 @@ function bindGroupButtons(){
 }
 
 /* =========================
-   갤러리 로딩 (위임 클릭 + 중복 방지)
+   갤러리 로딩
    ========================= */
 const galleryEl = $("#gallery");
 const imgModal  = $("#imgModal");
@@ -367,53 +357,34 @@ async function loadPictures(){
     galleryEl.style.display = "none";
     return;
   }
-  // 다시 그리기 전에 비워서 중복 리스너 방지
   galleryEl.innerHTML = files.map(p=>(
-    `<img class="hover-zoom" src="${p}" alt="pic" loading="lazy" decoding="async"
-          onerror="this.style.display='none'">`
+    `<img class="hover-zoom" src="${p}" alt="pic" onerror="this.style.display='none'">`
   )).join("");
+
+  galleryEl.querySelectorAll("img").forEach(img=>{
+    img.addEventListener("click", ()=>{
+      if(modalImg && imgModal){
+        modalImg.src = img.src;
+        imgModal.removeAttribute("hidden");
+        imgModal.setAttribute("aria-hidden", "false");
+      }
+    });
+  });
 }
 loadPictures();
 
-// 갤러리 클릭 위임 (한 번만)
-if (galleryEl && !galleryEl._boundClick) {
-  galleryEl.addEventListener("click", (e)=>{
-    const img = e.target.closest("img");
-    if(!img) return;
-    if(modalImg && imgModal){
-      modalImg.src = img.src;
-      imgModal.removeAttribute("hidden");
-      imgModal.setAttribute("aria-hidden", "false");
-    }
-  }, { passive:true });
-  galleryEl._boundClick = true;
-}
-
-// 모달 닫기 (중복 방지)
-if (imgModal && !imgModal._boundClose) {
-  imgModal.addEventListener("click", (e)=>{
-    if(e.target === imgModal) hideImgModal();
-  });
-  imgModal._boundClose = true;
-}
-if (!document._boundEscClose) {
-  document.addEventListener("keydown", (e)=>{
-    if(e.key === "Escape") hideImgModal();
-  });
-  document._boundEscClose = true;
-}
+// 모달 닫기
+imgModal && imgModal.addEventListener("click", e=>{ if(e.target === imgModal) hideImgModal(); });
+document.addEventListener("keydown", (e)=>{ if(e.key === "Escape"){ hideImgModal(); }});
 $$("[data-close]").forEach(btn=>{
-  if (!btn._boundClose) {
-    btn.addEventListener("click", ()=>{
-      const id = btn.getAttribute("data-close");
-      if(id === "imgModal") hideImgModal();
-    });
-    btn._boundClose = true;
-  }
+  btn.addEventListener("click", ()=>{
+    const id = btn.getAttribute("data-close");
+    if(id === "imgModal") hideImgModal();
+  });
 });
 
 /* =========================
-   모임 카드 렌더 (버튼 순서 고정)
+   모임 카드 렌더
    ========================= */
 function renderGroups(joinedSet){
   const groupsEl = document.getElementById("groups");
@@ -437,7 +408,7 @@ function renderGroups(joinedSet){
 
     const link   = GROUP_LINKS[it.key] || "#";
 
-    // ✅ joined일 때 버튼 순서를 [안내, 이동하기, 탈퇴하기]로 고정 출력
+    // joined일 때 버튼 순서를 [안내, 이동하기, 탈퇴하기]로 고정 출력
     const actions = joined
       ? `
         <a class="info-btn" href="guide.html?group=${it.key}" data-key="${it.key}">안내</a>
@@ -472,36 +443,26 @@ function renderGroups(joinedSet){
 }
 
 /* =========================
-   헤더 버튼 / Auth 상태 처리
+   헤더 (권한별)
    ========================= */
-const groupsEl  = $("#groups");
-const noticeEl  = $("#groupsNotice");
-const actionsEl = $(".page-actions");
-const btnRow    = $(".btn-row");
-
-function setLoggedOutHeader(){
+function setHeaderForRole(role){
+  const btnRow = document.querySelector(".btn-row");
   if(!btnRow) return;
-  btnRow.innerHTML = `
-    <a href="signup.html" class="btn">회원가입</a>
-    <a href="login.html"  class="btn ghost">로그인</a>`;
-}
-function setLoggedInHeader(){
-  if(!btnRow) return;
+  const isAdmin = role === "manager" || role === "master";
   btnRow.innerHTML = `
     <a id="noticeBtn" class="btn primary" href="notice.html">공지사항</a>
-    <button id="logoutBtn" class="btn ghost" type="button">로그아웃</button>`;
+    ${isAdmin ? `<a id="manageBtn" class="btn" href="members.html">회원관리</a>` : ``}
+    <button id="logoutBtn" class="btn ghost" type="button">로그아웃</button>
+  `;
   $("#logoutBtn")?.addEventListener("click", async ()=>{
-    try{
-      await signOut(auth);
-      notify("로그아웃되었습니다.");
-    }catch(e){
-      console.error(e);
-      notify("로그아웃 실패");
-    }
+    try{ await signOut(auth); notify("로그아웃되었습니다."); }
+    catch(e){ console.error(e); notify("로그아웃 실패"); }
   });
 }
 
-// 전역: 그룹 토글(DB 반영용)
+/* =========================
+   전역: 그룹 토글(DB 반영용)
+   ========================= */
 window.toggleGroup = async function(key, join){
   const user = auth.currentUser;
   if(!user) return;
@@ -516,22 +477,24 @@ window.toggleGroup = async function(key, join){
   await updateDoc(doc(db,"users",user.uid), upd);
 };
 
-// Auth 상태 관찰
+/* =========================
+   Auth 상태 관찰
+   ========================= */
 onAuthStateChanged(auth, async (user)=>{
   const loggedIn = !!user;
+  if(!loggedIn){ location.href = "index.html"; return; }
 
-  if(!loggedIn){
-    location.href = "index.html";
-    return;
-  }
   document.body.dataset.auth = "in";
-  setLoggedInHeader();
   try{
     await loadGroupLinks(); // 🔗 외부 링크 로드
     const snap = await getDoc(doc(db,"users", user.uid));
     const data = snap.exists() ? snap.data() : {};
-    const joinedSet = groupsToSet(data?.groups);
+    const role = data?.role || "member";
 
+    // 권한 기반 헤더
+    setHeaderForRole(role);
+
+    const joinedSet = groupsToSet(data?.groups);
     const subtitle = document.querySelector(".subtitle");
     const name = data?.name || user.displayName || (user.email?.split("@")[0] ?? "회원");
     if(subtitle) subtitle.textContent = `${name}님, 포니버스에 오신 것을 환영합니다`;
@@ -539,12 +502,13 @@ onAuthStateChanged(auth, async (user)=>{
     renderGroups(joinedSet);
   }catch(err){
     console.error("load user failed:", err);
+    setHeaderForRole("member");
     renderGroups(new Set());
   }
 
-  groupsEl ?.setAttribute("aria-hidden","false");
-  noticeEl ?.setAttribute("aria-hidden","false");
-  actionsEl?.setAttribute("aria-hidden","false");
+  $("#groups")?.setAttribute("aria-hidden","false");
+  $("#groupsNotice")?.setAttribute("aria-hidden","false");
+  $(".page-actions")?.setAttribute("aria-hidden","false");
   $("#groupsNotice") && ($("#groupsNotice").textContent = "자유는 필참이며, 캠핑/보드게임/운동 중 최소 1개를 선택하세요.");
   refreshCountsDebounced();
 });
@@ -554,10 +518,7 @@ onAuthStateChanged(auth, async (user)=>{
    ========================= */
 $("#withdrawBtn")?.addEventListener("click", async ()=>{
   const user = auth.currentUser;
-  if(!user){
-    notify("로그인 상태가 아닙니다.");
-    return;
-  }
+  if(!user){ notify("로그인 상태가 아닙니다."); return; }
   if(!confirm("정말 계정을 삭제하시겠습니까? 복구할 수 없습니다.")) return;
 
   try{
