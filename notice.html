@@ -185,7 +185,7 @@
     async function loadMd(){
       const el = document.getElementById("content");
       try{
-        const res = await fetch(`notice/notice.md?ts=${Date.now()}`, { cache:"no-cache" });
+        const res = await fetch(`docs/notice.md?ts=${Date.now()}`, { cache:"no-cache" });
         if(!res.ok) throw new Error("파일을 불러올 수 없습니다.");
         const md = await res.text();
 
@@ -201,12 +201,12 @@
         ok.className = "notice-ok";
         ok.innerHTML = `<button class="btn primary" id="okBtn">확인</button>`;
         el.appendChild(ok);
-        document.getElementById("okBtn").addEventListener("click", ()=> location.href = "index.html");
+        document.getElementById("okBtn").addEventListener("click", ()=> location.href = "home.html");
       }catch(e){
         console.error(e);
         el.innerHTML = `
           <p>공지사항을 불러오지 못했습니다. 파일 경로를 확인해 주세요.</p>
-          <div class='notice-ok'><button class='btn primary' onclick='location.href="index.html"'>확인</button></div>
+          <div class='notice-ok'><button class='btn primary' onclick='location.href="home.html"'>확인</button></div>
         `;
       }
     }

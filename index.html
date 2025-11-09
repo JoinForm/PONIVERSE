@@ -62,5 +62,20 @@
     onAuthStateChanged(auth, (user)=>{ if(user) location.href = "home.html"; });
   </script>
 
+  <!-- 로그인 상태 감지 -->
+  <script type="module">
+    import { auth, onAuthStateChanged, persistenceReady } from "./js/firebase.js";
+
+    // 로그인 유지 설정 완료 후 감시 시작
+    await persistenceReady;
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // 로그인되어 있으면 home.html로 자동 이동
+        location.href = "home.html";
+      }
+    });
+  </script>
+
+
 </body>
 </html>

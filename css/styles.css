@@ -160,7 +160,7 @@ h1 {
 @keyframes fadeToast { from{opacity:0; transform:translate(-50%,-40%);} to{opacity:1; transform:translate(-50%,-50%);} }
 @keyframes hideToast { to{opacity:0; transform:translate(-50%,-40%);} }
 
-/* ===== Image Modal (이미지 크기에 맞게 + 플로팅 X, 스크롤바 제거) ===== */
+/* ===== Image Modal ===== */
 #imgModal{
   position: fixed;
   inset: 0;
@@ -171,13 +171,12 @@ h1 {
   background: rgba(0,0,0,.75);
   backdrop-filter: blur(4px);
   padding: 0;
-  overflow: hidden;              /* ✅ 전체 오버레이에서 스크롤 안 생기게 */
+  overflow: hidden;
 }
 #imgModal:not([hidden]){ display: flex; }
-
 #imgModal .modal-body{
   position: relative;
-  display: inline-block;         /* ✅ 이미지 크기만큼만 차지 */
+  display: inline-block;
   padding: 0;
   margin: 0;
   background: transparent;
@@ -185,9 +184,8 @@ h1 {
   flex: 0 0 auto !important;
   width: fit-content;
   height: fit-content;
-  overflow: visible;             /* ✅ 버튼이 살짝 겹쳐도 잘리지 않게 */
+  overflow: visible;
 }
-
 #imgModal img{
   max-width: 94vw;
   max-height: 88dvh;
@@ -198,31 +196,19 @@ h1 {
   background: #0b1320;
   box-shadow: 0 0 20px rgba(0,0,0,.6);
 }
-
-/* ✅ 닫기 버튼: 이미지 모서리 기준으로 배치 후 translate로 '겹쳐 보이게'
-   (transform은 레이아웃 크기에 영향을 주지 않아 스크롤바가 안 생김) */
+/* 이미지 우상단 안쪽 닫기 버튼 */
 #imgModal .modal-close{
   position: absolute;
-  top: 0;                         /* 이미지 박스 우상단 모서리 */
-  right: 0;
-  transform: translate(50%,-50%); /* 모서리 밖으로 살짝 띄우기 */
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  top: 8px; right: 8px; transform: none;
+  width: 40px; height: 40px; border-radius: 50%;
   border: 1px solid rgba(120,160,255,.35);
-  background: rgba(25,30,50,.95);
-  color: #eaf1ff;
-  font-size: 20px;
-  line-height: 38px;
-  text-align: center;
+  background: rgba(20,24,40,.92);
+  color: #eaf1ff; font-size: 20px; line-height: 38px; text-align: center;
   cursor: pointer;
   box-shadow: 0 4px 10px rgba(0,0,0,.5), 0 0 0 1px rgba(80,120,255,.2) inset;
-  transition: transform .2s ease, filter .2s ease;
-  z-index: 30;
+  transition: transform .2s ease, filter .2s ease; z-index: 30;
 }
-#imgModal .modal-close:hover{ transform: translate(50%,-50%) scale(1.08); filter: brightness(1.2); }
-
-
+#imgModal .modal-close:hover{ transform: scale(1.08); filter: brightness(1.15); }
 
 /* ===== Groups (로그인 후 표시) ===== */
 .groups{
@@ -244,7 +230,7 @@ h1 {
 .group-card > a, .group-actions a.group-btn{ position:relative; z-index:5; pointer-events:auto; cursor:pointer; }
 
 .group-body{ padding:12px; display:grid; gap:10px; }
-.group-title{ display:inline-flex; align-items:center; gap:8px; line-height:1.2; }
+.group-title{ display:inline-flex; align-items:center; gap:8px; line-height:1.2; flex-wrap: wrap; }
 .group-title .badge{
   display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:10px;
   font-size:12px; font-weight:700; vertical-align:middle;
@@ -252,22 +238,37 @@ h1 {
 .group-title .badge.optional{ background:rgba(100,180,255,.25); border:1px solid rgba(100,180,255,.6); color:#9dc2ff; }
 .group-title .badge.required{ background:rgba(255,80,80,.25); border:1px solid rgba(255,80,80,.6); color:#ff6b6b; }
 
+/* 상태 배지(참가중/미참가) */
+.group-title .badge.status{
+  background: rgba(120, 220, 160, .18);
+  border: 1px solid rgba(120, 220, 160, .6);
+  color: #9ef0c0;
+}
+.group-title .badge.status.none{
+  background: rgba(255, 120, 120, .18);
+  border: 1px solid rgba(255, 120, 120, .6);
+  color: #ff9b9b;
+}
+
 .group-actions{ display:flex; align-items:center; gap:10px; }
-.group-actions [data-status]{ order:0; }
+.group-actions [data-status]{ display:none; } /* 기존 텍스트 숨김(호환) */
+.group-actions .info-btn{ order:0; }
 .group-actions .move-btn{ order:1; }
 .group-actions .group-btn{ order:2; }
 
-.group-actions .group-btn{
+.group-actions .group-btn,
+.group-actions .info-btn{
   background-color:#4fa8ff; border:none; border-radius:8px; color:#fff;
   padding:6px 12px; font-size:.9rem; cursor:pointer; transition:.2s; text-decoration:none;
-  /* ↓↓↓ 이 세 줄이 핵심 */
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-
+  display:inline-flex; align-items:center; justify-content:center;
   min-height:44px; line-height:1.15;
 }
-
+.group-actions .info-btn{
+  background: transparent;
+  color: #cfe1ff;
+  border: 1px solid #4b5b78;
+  min-height: 36px;
+}
 .group-actions .group-btn:hover{ background-color:#1c7eff; }
 .group-actions .withdraw-btn{ background-color:#ff4d4d; }
 .group-actions .withdraw-btn:hover{ background-color:#e63939; }
@@ -322,8 +323,8 @@ body[data-auth="in"] .page-actions { display:flex; }
 }
 
 /* === 모바일 최적화 보강 === */
-.dark-grad { min-height: 100dvh; }            /* 주소창 높이 변화 대응 */
-h1 { font-size: clamp(40px, 10vw, 130px); }   /* 유연한 타이포 */
+.dark-grad { min-height: 100dvh; }
+h1 { font-size: clamp(40px, 10vw, 130px); }
 .subtitle { font-size: clamp(16px, 4.5vw, 35px); }
 .mini-counts { font-size: clamp(13px, 3.6vw, 20px); }
 

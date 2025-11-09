@@ -22,90 +22,50 @@
         <h2>로그인</h2>
       </div>
 
-      <form id="loginForm" class="modal-body">
-        <label>이름(아이디)
-          <input type="text" name="username" required placeholder="가입 시 입력한 아이디(이름)" />
-        </label>
-
-        <label>연락처
-          <input type="tel" name="phone" required placeholder="예: 010-1234-5678" inputmode="numeric" />
+      <form id="loginForm" class="modal-body" novalidate>
+        <label>아이디
+          <input
+            type="text"
+            name="userId"
+            required
+            placeholder="영문/숫자/언더스코어 4~20자"
+            minlength="4"
+            maxlength="20"
+            pattern="^[A-Za-z0-9_]{4,20}$"
+            autocomplete="username"
+            inputmode="latin"
+          />
         </label>
 
         <label>비밀번호
-          <input type="password" name="password" required minlength="6" placeholder="비밀번호" />
+          <input
+            type="password"
+            name="password"
+            required
+            minlength="6"
+            placeholder="비밀번호"
+            autocomplete="current-password"
+          />
         </label>
 
         <div class="modal-actions">
           <button type="submit" class="btn primary">로그인</button>
           <button type="button" class="btn ghost" id="cancelBtn">취소</button>
         </div>
+
+        <div id="loginMsg" style="text-align:center;margin-top:6px;"></div>
       </form>
     </div>
   </section>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
-    import {
-      getAuth, signInWithEmailAndPassword, onAuthStateChanged,
-      setPersistence, browserLocalPersistence
-    } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
+  <!-- 공용 Firebase 래퍼 사용 -->
+  <script type="module" src="js/auth-login.js"></script>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyAfs8ZN-2ANX0lYvT_WVcOMXRkNB5usuRw",
-      authDomain: "poniverse-3c351.firebaseapp.com",
-      projectId: "poniverse-3c351",
-      storageBucket: "poniverse-3c351.appspot.com",
-      messagingSenderId: "608146456053",
-      appId: "1:608146456053:web:711de65e21a2e54a6574bc",
-      measurementId: "G-GFRG38YKVW"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    await setPersistence(auth, browserLocalPersistence);
-
-    // 이미 로그인 중이면 바로 홈으로
-    onAuthStateChanged(auth, (user) => {
-      if (user) location.href = "home.html";
-    });
-
-    // 연락처 포맷
-    function normalizePhone(r){ return (r||"").replace(/\D/g,""); }
-    function formatPhone(r){
-      const d = normalizePhone(r);
-      if(d.startsWith("02")) return d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*/,(_,a,b,c)=>[a,b,c].filter(Boolean).join("-"));
-      return d.replace(/^(\d{0,3})(\d{0,4})(\d{0,4}).*/,(_,a,b,c)=>[a,b,c].filter(Boolean).join("-"));
-    }
-    const phoneInput = document.querySelector('input[name="phone"]');
-    if (phoneInput) phoneInput.addEventListener("input", () => phoneInput.value = formatPhone(phoneInput.value));
-
-    // 가입 시 사용한 가짜 이메일 규칙
-    function makeFakeEmail(name, phone){
-      const clean  = name.replace(/\s+/g,"").replace(/[^ㄱ-ㅎ가-힣a-zA-Z0-9]/g,"");
-      const digits = normalizePhone(phone);
-      return `${clean}.${digits}@poniverse.kr`;
-    }
-
-    document.getElementById("cancelBtn").addEventListener("click", () => location.href = "index.html");
-
-    const form = document.getElementById("loginForm");
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const name  = form.username.value.trim();
-      const pw    = form.password.value;
-      const phone = normalizePhone(form.phone.value.trim());
-
-      if(!name || !pw || !phone){ alert("아이디, 연락처, 비밀번호를 모두 입력하세요."); return; }
-      if(!(phone.length===10 || phone.length===11)){ alert("연락처는 10~11자리로 입력하세요."); return; }
-
-      try{
-        await signInWithEmailAndPassword(auth, makeFakeEmail(name, phone), pw);
-        alert("로그인 성공! 홈으로 이동합니다.");
-        location.href = "home.html"; // ✅ 성공 후 홈으로 이동
-      }catch(e){
-        console.error(e);
-        alert("로그인 실패. 입력값을 확인하세요.");
-      }
+  <script>
+    // 취소 버튼: 필요 경로로 수정(index.html/home.html)
+    document.addEventListener('DOMContentLoaded', () => {
+      const cancelBtn = document.getElementById('cancelBtn');
+      if (cancelBtn) cancelBtn.addEventListener('click', () => location.href = 'index.html');
     });
   </script>
 </body>
