@@ -75,6 +75,30 @@ function getIdPart(u) {
   return base.split("@")[0] || "";
 }
 
+/* === 정렬 유틸: role 우선(master→manager→member), 같은 권한은 가입일 오래된 순 === */
+const ROLE_RANK = { master: 0, manager: 1, member: 2 };
+
+function getJoinedAtMs(u) {
+  const t = u?.createdAt || u?.created_at;
+  if (!t) return Number.MAX_SAFE_INTEGER;
+  if (typeof t?.toMillis === "function") return t.toMillis();
+  const ms = Date.parse(t);
+  return Number.isFinite(ms) ? ms : Number.MAX_SAFE_INTEGER;
+}
+
+function sortUsersByRoleThenJoined(arr) {
+  arr.sort((a, b) => {
+    const ra = ROLE_RANK[(a?.role || "member").toLowerCase()] ?? 3;
+    const rb = ROLE_RANK[(b?.role || "member").toLowerCase()] ?? 3;
+    if (ra !== rb) return ra - rb;            // 권한 우선
+    const ja = getJoinedAtMs(a);
+    const jb = getJoinedAtMs(b);
+    if (ja !== jb) return ja - jb;            // 오래된 가입 먼저 (최근 가입은 맨 뒤)
+    return (a?.name || "").localeCompare(b?.name || "", "ko");
+  });
+  return arr;
+}
+
 /* ============ 권한/페이지 진입 ============ */
 let ME = null;
 let IS_MANAGER = false;
@@ -132,8 +156,11 @@ function applyFiltersAndRender() {
   const onlyNever = $("#onlyNeverAttended")?.checked;
   let list = CACHE.filter(u => matchesTerm(u, term));
   if (onlyNever) list = list.filter(neverAttended);
+
+  sortUsersByRoleThenJoined(list);   // ✅ 필터 후에도 정렬 유지
   renderTable(list);
 }
+
 
 /* ============ 데이터 로드/렌더 ============ */
 async function loadMembers() {
@@ -143,7 +170,7 @@ async function loadMembers() {
   const qSnap = await getDocs(collection(db, "users"));
   const rows = [];
   qSnap.forEach(d => rows.push({ id: d.id, ...d.data() }));
-  rows.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
+  sortUsersByRoleThenJoined(rows);  // ✅ 역할→가입일(오래된 순) 정렬
 
   CACHE = rows;            // 서버 기준으로 캐시 갱신
   applyFiltersAndRender(); // 필터 적용 후 렌더

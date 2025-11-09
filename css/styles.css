@@ -29,7 +29,7 @@ body::before{
 /* ===== Hero ===== */
 .hero {
   display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
-  min-height:auto; padding:200px 16px 100px; text-align:center;
+  min-height:auto; padding:150px 16px 50px; text-align:center;
 }
 .hero .btn-row { margin-bottom: 0; }
 .groups-warning { margin-top: 2px; }
@@ -399,4 +399,55 @@ body.non-master col.col-role { display:none; }
 
 .page-header{
   margin: 24px 0 18px !important; /* 상단 24px, 하단 18px 정도 여유 */
+}
+
+/* ===== 모바일 스크롤 체이닝 허용 & 내부 스크롤 제거 ===== */
+
+/* 전역: 페이지가 스크롤 주체가 되도록 */
+html, body {
+  height: auto;             /* 100% 대신 auto: 내부 스크롤 상자 생성 방지 */
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+/* 폼 컨테이너 계열: 내부 스크롤 제거 -> 페이지로 넘김 */
+.signup-page,
+.form-page,
+.signup,
+.form-container,
+.form-wrap,
+.form-body,
+.form {
+  height: auto !important;
+  min-height: 100vh;        /* 화면 높이 이상이면 자연히 body가 스크롤 */
+  overflow: visible !important;          /* 내부 스크롤 박스 금지 */
+  -webkit-overflow-scrolling: auto !important;
+}
+
+/* 입력 계열: 자체 스크롤 금지 (특히 iOS에서 textarea 고정 높이일 때) */
+input, select, textarea {
+  overflow: visible !important;          /* 내부 스크롤바 숨김 */
+  -webkit-overflow-scrolling: auto !important;
+  /* Android/Chromium에서 세로 스크롤 제스처를 페이지로 넘김 */
+  touch-action: pan-y;
+}
+
+/* 불필요한 스크롤 억제 옵션을 전역 해제 */
+@supports (overscroll-behavior: auto) {
+  html, body {
+    overscroll-behavior: auto; /* contain/none 이면 부모 스크롤 차단됨 */
+  }
+}
+
+/* 혹시 어떤 곳에 고정 레이아웃을 쓰고 있다면 vh 고정 대신 min-height 사용 권장 */
+.full-vh, .vh-lock {
+  height: auto !important;
+  min-height: 100vh !important;
+  overflow: visible !important;
+}
+
+/* 입력칸 주변 패딩 터치도 페이지 스크롤에 기여하도록 hover/커서 관련 영향 제거 */
+.field, .form-row, label {
+  -webkit-overflow-scrolling: auto;
+  overflow: visible;
 }

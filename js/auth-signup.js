@@ -167,3 +167,21 @@ form.addEventListener("submit", async (e) => {
     }
   }
 });
+
+// ===== 모바일 스크롤 방해 제거 (선택: 기존 코드에 touchmove preventDefault가 있을 때만 필요)
+document.addEventListener("DOMContentLoaded", () => {
+  // 문서 전체에서 터치 스크롤은 브라우저가 처리하도록 (패시브)
+  window.addEventListener("touchmove", () => {}, { passive: true });
+
+  // 폼 루트에 걸려 있을 수 있는 scroll-lock 클래스를 해제
+  const root = document.querySelector(".signup-page, .form-page, .signup, .form-container");
+  if (root) {
+    root.classList.remove("no-scroll", "scroll-lock");
+    root.style.overflow = "visible";
+  }
+
+  // 혹시 body에 스크롤 잠금한 경우 풀기
+  document.body.classList.remove("no-scroll", "scroll-lock");
+  document.body.style.overflow = "";
+});
+

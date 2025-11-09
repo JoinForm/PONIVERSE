@@ -178,14 +178,81 @@ function bindGroupButtons(){
 
   groupsEl.querySelectorAll(".group-btn").forEach(btn=>{
     btn.addEventListener("click", async (e)=>{
-      // 링크형 버튼(이동하기) — 기본 동작을 막고 openLink만 사용 (중복 오픈 방지)
-      if(btn.matches("a.group-btn")){
+      // 링크형 버튼(이동하기)
+      // 미가입이면 선참가(저장) → 링크 이동, 이미 가입이면 바로 이동
+      if (btn.matches("a.group-btn")) {
         e.preventDefault();
         e.stopPropagation();
+
+        const key  = btn.dataset.key || btn.closest(".group-card")?.dataset.key;
+        const card = btn.closest(".group-card");
         const link = btn.getAttribute("href");
-        if(link && link !== "#") openLink(link, { newTab:true });
+
+        if (!link || link === "#") return;
+
+        const joined = card?.getAttribute("data-joined") === "true";
+        if (joined) {
+          openLink(link, { newTab: true });
+          return;
+        }
+
+        // 자유는 기본 참가라 보통 joined=true겠지만, 방어적으로 처리
+        if (key === "free") {
+          openLink(link, { newTab: true });
+          return;
+        }
+
+        // 미가입 → 먼저 저장 후 링크 열기 (iOS 안전 순서)
+        try {
+          // 낙관적 UI: 카드/배지/버튼 갱신
+          card?.setAttribute("data-joined", "true");
+          card?.querySelector(".badge.status")?.classList.remove("none");
+          const sBadge = card?.querySelector(".badge.status");
+          if (sBadge) sBadge.textContent = "참가중";
+          const sText = card?.querySelector("[data-status]");
+          if (sText) sText.textContent = "참가중";
+
+          // 버튼 교체 (참가하기 → 탈퇴하기), 이동하기 버튼 없으면 추가
+          const actionsEl = card?.querySelector(".group-actions");
+          const existsMove = actionsEl?.querySelector(".move-btn");
+          if (!existsMove && actionsEl) {
+            const moveA = document.createElement("a");
+            moveA.className = "group-btn move-btn";
+            moveA.href = link;
+            moveA.target = "_blank";
+            moveA.rel = "noopener";
+            moveA.textContent = "이동하기";
+            actionsEl.appendChild(moveA);
+          }
+          const joinBtn = actionsEl?.querySelector('.group-btn:not(.withdraw-btn):not(.move-btn)');
+          if (joinBtn) {
+            const w = document.createElement("button");
+            w.className = "group-btn withdraw-btn";
+            w.dataset.key = key;
+            w.textContent = "탈퇴하기";
+            joinBtn.replaceWith(w);
+          }
+
+          // DB 저장 먼저
+          await window.toggleGroup?.(key, true);
+          refreshCountsDebounced({ optimisticDelta: { [key]: +1 } });
+
+          // 저장 끝났으면 링크 열기
+          setTimeout(() => openLink(link, { newTab: true }), 30);
+        } catch (err) {
+          console.error("auto-join before move failed:", err);
+          // 롤백
+          card?.setAttribute("data-joined", "false");
+          card?.querySelector(".badge.status")?.classList.add("none");
+          const sBadge2 = card?.querySelector(".badge.status");
+          if (sBadge2) sBadge2.textContent = "미참가";
+          const sText2 = card?.querySelector("[data-status]");
+          if (sText2) sText2.textContent = "미참가";
+          notify("참가에 실패했습니다. 다시 시도해 주세요.");
+        }
         return;
       }
+
 
       // 참가/탈퇴 버튼
       e.preventDefault();
@@ -281,16 +348,19 @@ function bindGroupButtons(){
       if(key==="sport") delta.sport = willJoin ? +1 : -1;
       refreshCountsDebounced({ optimisticDelta: delta });
 
+      // iOS 안전: 저장을 먼저 끝내고 → 링크를 나중에 연다
       try{
-        if(willJoin && linkHref && linkHref !== "#"){
-          openLink(linkHref, { newTab:true });
-        }
         await window.toggleGroup?.(key, willJoin);
         refreshCountsDebounced();
-      }catch(err){
+        if (willJoin && linkHref && linkHref !== "#") {
+          // 아주 짧은 지연을 주면 새 탭 전환 시점에서도 안전
+          setTimeout(() => openLink(linkHref, { newTab:true }), 30);
+        }
+      } catch(err){
         console.error("toggleGroup failed:", err);
         refreshCountsDebounced();
       }
+
     });
   });
 
