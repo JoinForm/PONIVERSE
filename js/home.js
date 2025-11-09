@@ -294,15 +294,19 @@ function bindGroupButtons(){
     });
   });
 
-  // 썸네일 클릭도 기본 동작 막고 openLink만 사용 (중복 오픈 방지)
+  // 썸네일(이미지) 클릭 완전 차단 + 커서 비활성화
   document.querySelectorAll(".group-card > a").forEach(a=>{
     a.addEventListener("click", (e)=>{
       e.preventDefault();
       e.stopPropagation();
-      const link = a.getAttribute("href");
-      if(link && link !== "#") openLink(link, { newTab:true });
+      return false;
     });
+    a.setAttribute("aria-disabled", "true");
+    a.style.cursor = "default";       // ✅ 커서 기본화 (손모양 안 뜸)
+    a.style.pointerEvents = "none";   // ✅ 완전 클릭 불가 (hover도 차단)
   });
+
+
 }
 
 /* =========================
