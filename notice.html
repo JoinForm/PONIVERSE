@@ -129,12 +129,33 @@
     function renderInline(text){
       let t = escapeHtml(String(text || "").replace(/\r\n?/g, "\n"));
 
-      // 헤더
-      t = t.replace(/^###\s+(.+)$/gm, "<h3>$1</h3>")
-           .replace(/^##\s+(.+)$/gm,  "<h2>$1</h2>")
-           .replace(/^#\s+(.+)$/gm,   "<h1>$1</h1>");
+      // --- 수평선 ---
+      t = t.replace(/^\s*-{3,}\s*$/gm, "<hr>");
 
-      // 순서있는 리스트
+      // --- 헤더 ---
+      t = t.replace(/^###\s+(.+)$/gm, "<h3>$1</h3>")
+          .replace(/^##\s+(.+)$/gm,  "<h2>$1</h2>")
+          .replace(/^#\s+(.+)$/gm,   "<h1>$1</h1>");
+
+      // --- 이미지, 링크, 인라인 강조/코드 ---
+      t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s"[^"]*")?\)/g, '<img src="$2" alt="$1">')
+          .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, `<a href="$2" target="_blank" rel="noopener">$1</a>`)
+          .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+          .replace(/\*(.+?)\*/g, "<em>$1</em>")
+          .replace(/`(.+?)`/g, "<code>$1</code>");
+
+      // --- 블록 인용문(> ...) 묶어 처리 ---
+      t = t.replace(/(^|\n)(> .*(?:\n> .*)*)/g, (_, lead, block) => {
+        const inner = block.replace(/^> ?/gm, "");
+        // 인용문 안의 빈 줄은 문단으로, 단일 줄바꿈은 <br>로
+        const html = escapeHtml(inner)
+          .replace(/  \n/g, "<br>\n")   // 하드 줄바꿈(공백 두 칸)
+          .replace(/\\\n/g, "<br>\n")   // 하드 줄바꿈(백슬래시)
+          .split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g,"<br>")}</p>`).join("");
+        return `${lead}<blockquote>${html}</blockquote>`;
+      });
+
+      // --- 목록(ol/ul) ---
       t = t.replace(/(?:^\s*\d+\.\s+.*(?:\n|$))+?/gm, block=>{
         const items = block.trimEnd().split("\n")
           .filter(Boolean)
@@ -142,8 +163,6 @@
           .join("");
         return `<ol>${items}</ol>`;
       });
-
-      // 순서없는 리스트
       t = t.replace(/(?:^\s*[-*]\s+.*(?:\n|$))+?/gm, block=>{
         const items = block.trimEnd().split("\n")
           .filter(Boolean)
@@ -152,13 +171,10 @@
         return `<ul>${items}</ul>`;
       });
 
-      // 인라인 강조/링크/코드
-      t = t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-           .replace(/\*(.+?)\*/g, "<em>$1</em>")
-           .replace(/`(.+?)`/g, "<code>$1</code>")
-           .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, `<a href="$2" target="_blank" rel="noopener">$1</a>`);
+      // --- 하드 줄바꿈 처리(문단 외부 텍스트용) ---
+      t = t.replace(/  \n/g, "<br>\n").replace(/\\\n/g, "<br>\n");
 
-      // 문단 처리
+      // --- 문단 처리 ---
       const lines = t.split("\n");
       let out = "", buf = [];
       const flush = ()=>{
@@ -169,9 +185,8 @@
         }
       };
       for(const line of lines){
-        if(/^<\/?(h\d|ul|ol|li|pre|code)/.test(line.trim())){
-          flush();
-          out += line + "\n";
+        if(/^<\/?(h\d|ul|ol|li|pre|code|blockquote|hr|img)/.test(line.trim())){
+          flush(); out += line + "\n";
         }else if(line.trim()===""){
           flush();
         }else{
@@ -181,6 +196,7 @@
       flush();
       return out;
     }
+
 
     async function loadMd(){
       const el = document.getElementById("content");

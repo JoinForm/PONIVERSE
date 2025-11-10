@@ -19,15 +19,19 @@
 
     <!-- 모임 카운트(비로그인도 표시) -->
     <p class="mini-counts" aria-live="polite">
-      캠핑 <span id="c1">0</span><span id="d1">/20</span> ·
-      보드게임 <span id="c2">0</span><span id="d2">/20</span> ·
-      운동 <span id="c3">0</span><span id="d3">/20</span>
+      <p id="countsLine" class="counts-line" aria-live="polite">
+        캠핑 <span id="st-camp"  class="status-badge">확인 중…</span> ·
+        보드게임 <span id="st-board" class="status-badge">확인 중…</span> ·
+        운동 <span id="st-sport" class="status-badge">확인 중…</span>
+      </p>
+
     </p>
 
     <!-- 링크형 버튼 (로그아웃 상태 전용) -->
     <div class="btn-row">
-      <a href="signup.html" class="btn">회원가입</a>
-      <a href="login.html"  class="btn ghost">로그인</a>
+      <!-- 회원가입: 모달 게이트 오픈 -->
+      <button id="btnSignUp" class="btn" type="button">회원가입</button>
+      <a href="login.html" class="btn ghost">로그인</a>
     </div>
   </header>
 
@@ -42,40 +46,61 @@
     </div>
   </div>
 
+  <!-- 가입 조건/유의사항 모달 -->
+  <div id="signupGate" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+    <div class="modal__overlay" data-close="1"></div>
+    <div class="modal__panel" role="document" tabindex="-1">
+      <header class="modal__header">
+        <h2 id="gateTitle">가입 조건 및 유의사항</h2>
+      </header>
+
+      <div class="modal__body">
+        <section class="gate__section">
+          <h3>✅ 가입 조건</h3>
+          <ul class="gate__list">
+            <li><strong>지역:</strong> 포항, 경주 등 <strong>경북</strong></li>
+            <li><strong>나이:</strong> <strong>25~35세</strong> (01~91년생)</li>
+            <li><strong>인원:</strong> 모임별 <strong>20명</strong> 정원 (남:10명 / 여:10명)</li>
+          </ul>
+        </section>
+
+        <hr class="gate__divider"/>
+
+        <section class="gate__section">
+          <h3>⚠️ 모임 참여 시 유의 사항</h3>
+          <div class="gate__notice">
+            <p>● 본 모임은 참가자 개인의 자율적인 선택과 책임 하에 이루어지며, 모임 활동 중 발생할 수 있는 모든 문제(개인 간 분쟁, 재산 손실, 사고, 이성 문제 등)에 대한 책임은 해당 참가자 본인에게 있습니다.</p>
+            <p>● 모임 주최자는 모임 활동 중 발생한 사고나 분쟁에 대해 어떠한 법적 책임도 지지 않습니다.</p>
+            <p>● 참가자는 이에 동의하고 모임에 참여하는 것으로 간주됩니다.</p>
+          </div>
+        </section>
+
+        <label class="gate__agree">
+          <input type="checkbox" id="agreeChk" />
+          <span>위 내용에 동의합니다.</span>
+        </label>
+      </div>
+
+      <footer class="modal__footer">
+        <button class="btn ghost" data-close="1" type="button">취소</button>
+        <button id="goSignup" class="btn primary" type="button" disabled>동의하고 회원가입</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- 토스트 -->
   <div class="toast" id="toast" aria-live="polite"></div>
 
-  <!-- 로그아웃 전용 스크립트: 카운트/갤러리만 -->
+  <!-- 로그아웃 전용 스크립트: 카운트/갤러리 + 가입조건 게이트 -->
   <script type="module" src="js/index.js"></script>
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
-    import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence }
-      from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 
-    const app = initializeApp({
-      apiKey:"AIzaSyAfs8ZN-2ANX0lYvT_WVcOMXRkNB5usuRw",
-      authDomain:"poniverse-3c351.firebaseapp.com",
-      projectId:"poniverse-3c351"
-    });
-    const auth = getAuth(app);
-    await setPersistence(auth, browserLocalPersistence);
-    onAuthStateChanged(auth, (user)=>{ if(user) location.href = "home.html"; });
-  </script>
-
-  <!-- 로그인 상태 감지 -->
+  <!-- 로그인 상태 감지(중복 초기화 제거 버전) -->
   <script type="module">
     import { auth, onAuthStateChanged, persistenceReady } from "./js/firebase.js";
-
-    // 로그인 유지 설정 완료 후 감시 시작
-    await persistenceReady;
+    await persistenceReady; // 로컬 퍼시스턴스 준비 후
     onAuthStateChanged(auth, (user) => {
-      if (user) {
-        // 로그인되어 있으면 home.html로 자동 이동
-        location.href = "home.html";
-      }
+      if (user) location.href = "home.html";
     });
   </script>
-
-
 </body>
 </html>

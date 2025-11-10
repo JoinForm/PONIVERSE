@@ -7,6 +7,32 @@ import {
   collection, getDocs, query, where, limit
 } from "./firebase.js";
 
+const LIMIT_GENDER = 10;
+const groupKeys = ["camp","board","sport"];
+
+// 세 모임 모두 특정 성별이 마감인지 확인
+async function isGenderAllClosed(gender){
+  try{
+    const counts = await Promise.all(
+      groupKeys.map(k =>
+        getDocs(
+          query(
+            collection(db, "users"),
+            where(`groups.${k}`, "==", true),
+            where("gender", "==", gender)
+          )
+        )
+      )
+    );
+    // getDocs로 했으니 size 비교, 성능 더 중요하면 getCountFromServer로 변경 가능
+    return counts.every(snap => (snap.size || 0) >= LIMIT_GENDER);
+  }catch(e){
+    console.error("[isGenderAllClosed] failed:", e);
+    return false; // 장애 시 차단하지 않음
+  }
+}
+
+
 // ====== 도우미 ======
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 
@@ -117,6 +143,31 @@ form.addEventListener("submit", async (e) => {
       }
     }
 
+    // --- 성별 마감 차단 (세 모임 모두 마감 시) ---
+    {
+      const genderChosen = form.gender?.value || "";
+      if (!genderChosen) return showMsg("성별을 선택해주세요.");
+
+      // 세션 정보 우선 사용
+      const maleClosed   = JSON.parse(sessionStorage.getItem("__MALE_ALL_CLOSED")   || "false");
+      const femaleClosed = JSON.parse(sessionStorage.getItem("__FEMALE_ALL_CLOSED") || "false");
+      const closedBySession = (genderChosen === "남" ? maleClosed : femaleClosed);
+
+      let reallyClosed = closedBySession;
+      if (reallyClosed === false) {
+        // 세션이 false라도 정확히 한 번 서버에서 검증
+        reallyClosed = await isGenderAllClosed(genderChosen);
+        sessionStorage.setItem(
+          genderChosen === "남" ? "__MALE_ALL_CLOSED" : "__FEMALE_ALL_CLOSED",
+          JSON.stringify(reallyClosed)
+        );
+      }
+      if (reallyClosed) {
+        return showMsg(`현재 ${genderChosen} 회원은(는) 모든 모임이 마감되어 가입이 제한됩니다.`);
+      }
+    }
+
+
     // ====== 계정 생성
     if (submitBtn) submitBtn.textContent = "가입 처리 중…";
 
@@ -169,19 +220,30 @@ form.addEventListener("submit", async (e) => {
 });
 
 // ===== 모바일 스크롤 방해 제거 (선택: 기존 코드에 touchmove preventDefault가 있을 때만 필요)
-document.addEventListener("DOMContentLoaded", () => {
-  // 문서 전체에서 터치 스크롤은 브라우저가 처리하도록 (패시브)
-  window.addEventListener("touchmove", () => {}, { passive: true });
+document.addEventListener("DOMContentLoaded", async () => {
+  const genderSel = form.gender; // <select name="gender"> 또는 라디오 name="gender"
+  if (!genderSel) return;
 
-  // 폼 루트에 걸려 있을 수 있는 scroll-lock 클래스를 해제
-  const root = document.querySelector(".signup-page, .form-page, .signup, .form-container");
-  if (root) {
-    root.classList.remove("no-scroll", "scroll-lock");
-    root.style.overflow = "visible";
+  // 우선 index에서 세션으로 넘긴 값 활용(빠름)
+  const maleClosed   = JSON.parse(sessionStorage.getItem("__MALE_ALL_CLOSED")   || "false");
+  const femaleClosed = JSON.parse(sessionStorage.getItem("__FEMALE_ALL_CLOSED") || "false");
+
+  // 화면 표시 및 비활성화
+  const disableOpt = (val, closed) => {
+    const opt = genderSel.querySelector(`option[value="${val}"]`) || genderSel.querySelector(`[value="${val}"]`);
+    if (opt) opt.disabled = !!closed;
+  };
+  disableOpt("남", maleClosed);
+  disableOpt("여", femaleClosed);
+
+  // 세션 정보가 없거나 불확실하면 Firestore로 보정
+  if (maleClosed === false && femaleClosed === false){
+    const [mAll, fAll] = await Promise.all([isGenderAllClosed("남"), isGenderAllClosed("여")]);
+    disableOpt("남", mAll);
+    disableOpt("여", fAll);
+    sessionStorage.setItem("__MALE_ALL_CLOSED",   JSON.stringify(mAll));
+    sessionStorage.setItem("__FEMALE_ALL_CLOSED", JSON.stringify(fAll));
   }
-
-  // 혹시 body에 스크롤 잠금한 경우 풀기
-  document.body.classList.remove("no-scroll", "scroll-lock");
-  document.body.style.overflow = "";
 });
+
 

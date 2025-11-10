@@ -1,4 +1,9 @@
-// js/home.js — 정리본 (단일 진입 지점)
+// js/home.js — 홈(로그인 후)
+// - 그룹 카드 + 남/여 인원 칩(캠핑/보드/운동/자유 모두)
+// - 참가/탈퇴 토글 + 낙관적 UI
+// - (선택) 상단 총원 카운트: DOM 없으면 자동 스킵
+// - 외부 링크 로딩(links.json)
+// - 로그아웃/회원탈퇴
 
 /* =========================
    Firebase 초기화
@@ -26,20 +31,17 @@ const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
-// 로그인 상태 유지 (Local)
+// 로그인 상태 유지(Local)
 await setPersistence(auth, browserLocalPersistence);
 
 /* =========================
-   DOM 유틸 & 초기 상태
+   DOM 유틸 & 토스트
    ========================= */
 const $  = (sel, ctx=document) => ctx.querySelector(sel);
 const $$ = (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
 
 document.body.dataset.auth = "out";
 
-/* =========================
-   Toast
-   ========================= */
 function notify(msg){
   let t = $("#toast") || $("#appToast");
   if(!t){
@@ -81,7 +83,7 @@ async function loadGroupLinks(){
 }
 
 /* =========================
-   안전한 링크 오픈 (단일 경로)
+   안전한 링크 오픈
    ========================= */
 function openLink(link, { newTab = true } = {}) {
   if (!link || link === "#") return;
@@ -104,21 +106,25 @@ function openLink(link, { newTab = true } = {}) {
 }
 
 /* =========================
-   상단 카운트
+   상단 총원 카운트(있으면만 사용)
    ========================= */
-const LIMIT = 20;
+const LIMIT_TOTAL = 20;
 let __countReqId = 0;
 let __refreshTimer = null;
 
-function setCountUI(id, n){
-  const el = document.getElementById(id);
+function setCountText(el, val, limit = LIMIT_TOTAL){
   if(!el) return;
-  el.textContent = String(Math.min(n, LIMIT));
-  el.style.color = n >= LIMIT ? "#ff4d4d" : "#66d1ff";
+  const n = Math.min(val, limit);
+  el.textContent = String(n);
+  el.style.color = (val >= limit) ? "#ff4d4d" : "#66d1ff";
 }
 
-async function refreshCounts({optimisticDelta} = {}){
+async function refreshCounts(){
   try{
+    // 상단 카운트 DOM이 없는 페이지면 스킵
+    const need = $("#c1") || $("#c2") || $("#c3");
+    if(!need) return;
+
     const usersRef = collection(db, "users");
     const reqId = ++__countReqId;
 
@@ -130,33 +136,116 @@ async function refreshCounts({optimisticDelta} = {}){
 
     if(reqId !== __countReqId) return;
 
-    let camp  = campSnap.data().count  || 0;
-    let board = boardSnap.data().count || 0;
-    let sport = sportSnap.data().count || 0;
+    const camp  = campSnap.data().count  ?? 0;
+    const board = boardSnap.data().count ?? 0;
+    const sport = sportSnap.data().count ?? 0;
 
-    if(optimisticDelta){
-      if(typeof optimisticDelta.camp  === "number")  camp  = Math.max(0, camp  + optimisticDelta.camp);
-      if(typeof optimisticDelta.board === "number")  board = Math.max(0, board + optimisticDelta.board);
-      if(typeof optimisticDelta.sport === "number")  sport = Math.max(0, sport + optimisticDelta.sport);
-    }
-
-    setCountUI("c1", camp);
-    setCountUI("c2", board);
-    setCountUI("c3", sport);
+    setCountText($("#c1"), camp);
+    setCountText($("#c2"), board);
+    setCountText($("#c3"), sport);
+    $("#d1") && ($("#d1").textContent = "/20");
+    $("#d2") && ($("#d2").textContent = "/20");
+    $("#d3") && ($("#d3").textContent = "/20");
   }catch(err){
     console.error("[refreshCounts] failed:", err);
   }
 }
-function refreshCountsDebounced(opts){
+function refreshCountsDebounced(){
   clearTimeout(__refreshTimer);
-  __refreshTimer = setTimeout(()=>refreshCounts(opts), 60);
+  __refreshTimer = setTimeout(()=>refreshCounts(), 60);
 }
-document.addEventListener("DOMContentLoaded", ()=> refreshCounts());
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") refreshCountsDebounced(); });
 window.addEventListener("online", ()=> refreshCountsDebounced());
 
 /* =========================
-   groups 객체 → Set
+   성별 카운트(칩) — 카드 내부 표시
+   ========================= */
+const LIMIT_GENDER = 10;   // 캠핑/보드/운동: 남 10 / 여 10
+let __gReqId = 0;
+
+// 성별 정원 체크: 그룹(key)과 성별("남"/"여")을 받아 현재 인원이 정원 이상인지 반환
+async function isGenderFull(groupKey, gender){
+  if(groupKey === "free" || !gender) return false; // 자유는 정원 없음 / 성별 미기입시는 패스
+  try{
+    const usersRef = collection(db, "users");
+    const snap = await getCountFromServer(
+      query(
+        usersRef,
+        where(`groups.${groupKey}`, "==", true),
+        where("gender", "==", gender)
+      )
+    );
+    const n = snap.data().count || 0;
+    return n >= LIMIT_GENDER; // 정원 10명
+  }catch(e){
+    console.error("[isGenderFull] failed:", e);
+    return false; // 장애 시 막지 않고 진행
+  }
+}
+
+
+function setChip(el, label, n, limit = LIMIT_GENDER){
+  if(!el) return;
+  el.innerHTML = `<span class="lbl">${label}</span><span class="val">${n}/${limit}</span>`;
+  el.classList.toggle("full", n >= limit); // 꽉차면 빨강 강조(css .chip.full)
+}
+function setChipFree(el, label, n){
+  if(!el) return;
+  el.innerHTML = `<span class="lbl">${label}</span><span class="val">${n}명</span>`;
+  el.classList.remove("full"); // 자유는 정원 없음 → 항상 풀표시 해제
+}
+
+async function refreshCountsGender(){
+  try{
+    const usersRef = collection(db, "users");
+    const reqId = ++__gReqId;
+
+    // 남/여 × (캠핑/보드/운동/자유)
+    const [
+      campM,  campF,
+      boardM, boardF,
+      sportM, sportF,
+      freeM,  freeF
+    ] = await Promise.all([
+      getCountFromServer(query(usersRef, where("groups.camp",  "==", true), where("gender","==","남"))),
+      getCountFromServer(query(usersRef, where("groups.camp",  "==", true), where("gender","==","여"))),
+      getCountFromServer(query(usersRef, where("groups.board", "==", true), where("gender","==","남"))),
+      getCountFromServer(query(usersRef, where("groups.board", "==", true), where("gender","==","여"))),
+      getCountFromServer(query(usersRef, where("groups.sport", "==", true), where("gender","==","남"))),
+      getCountFromServer(query(usersRef, where("groups.sport", "==", true), where("gender","==","여"))),
+      getCountFromServer(query(usersRef, where("groups.free",  "==", true), where("gender","==","남"))),
+      getCountFromServer(query(usersRef, where("groups.free",  "==", true), where("gender","==","여"))),
+    ]);
+
+    if(reqId !== __gReqId) return;
+
+    const cM = campM.data().count  || 0;
+    const cF = campF.data().count  || 0;
+    const bM = boardM.data().count || 0;
+    const bF = boardF.data().count || 0;
+    const sM = sportM.data().count || 0;
+    const sF = sportF.data().count || 0;
+    const fM = freeM.data().count  || 0;
+    const fF = freeF.data().count  || 0;
+
+    // 카드 칩 채우기(캠/보/운: 정원 10, 자유: 정원 없음)
+    setChip(document.getElementById("chip-camp-m"),  "남", cM);
+    setChip(document.getElementById("chip-camp-f"),  "여", cF);
+    setChip(document.getElementById("chip-board-m"), "남", bM);
+    setChip(document.getElementById("chip-board-f"), "여", bF);
+    setChip(document.getElementById("chip-sport-m"), "남", sM);
+    setChip(document.getElementById("chip-sport-f"), "여", sF);
+
+    setChipFree(document.getElementById("chip-free-m"), "남", fM);
+    setChipFree(document.getElementById("chip-free-f"), "여", fF);
+
+  }catch(err){
+    console.error("[refreshCountsGender] failed:", err);
+  }
+}
+
+/* =========================
+   그룹 집합 변환
    ========================= */
 function groupsToSet(groups){
   const s = new Set();
@@ -170,91 +259,99 @@ function groupsToSet(groups){
 }
 
 /* =========================
-   그룹 카드 버튼 바인딩
+   그룹 카드 렌더 (남/여 칩 포함: 자유까지)
+   ========================= */
+function renderGroups(joinedSet){
+  const groupsEl = document.getElementById("groups");
+  if(!groupsEl) return;
+
+  const items = [
+    { key:"camp",  title:"캠핑",    img:"image/meeting/sample1.png" },
+    { key:"board", title:"보드게임", img:"image/meeting/sample2.png" },
+    { key:"sport", title:"운동",    img:"image/meeting/sample3.png" },
+    { key:"free",  title:"자유",    img:"image/meeting/sample4.png" },
+  ];
+
+  groupsEl.innerHTML = items.map(it=>{
+    const joined = joinedSet.has(it.key);
+
+    const link = GROUP_LINKS[it.key] || "#";
+
+    // 자유에도 칩 추가 (표기만 n명, full 강조 없음)
+    const chips = `
+      <div class="gender-chips" aria-label="${it.title} 성별 인원">
+        <span id="chip-${it.key}-m" class="chip male"><span class="lbl">남</span><span class="val">0${it.key==="free" ? "명" : "/10"}</span></span>
+        <span id="chip-${it.key}-f" class="chip female"><span class="lbl">여</span><span class="val">0${it.key==="free" ? "명" : "/10"}</span></span>
+      </div>
+    `;
+
+    const actions = joined
+      ? `
+        <a class="info-btn" href="guide.html?group=${it.key}" data-key="${it.key}">안내</a>
+        <a class="group-btn move-btn" href="${link}" target="_blank" rel="noopener">이동하기</a>
+        <button class="group-btn withdraw-btn" data-key="${it.key}">탈퇴하기</button>
+      `
+      : `
+        <a class="info-btn" href="guide.html?group=${it.key}" data-key="${it.key}">안내</a>
+        <button class="group-btn" data-key="${it.key}">참가하기</button>
+      `;
+
+    return `
+      <article class="group-card" data-key="${it.key}" data-joined="${joined ? "true":"false"}">
+        <a href="${link}" target="_blank" rel="noopener" title="${it.title}">
+          <img class="group-thumb" src="${it.img}" alt="${it.title}" onerror="this.style.display='none'">
+        </a>
+        <div class="group-body">
+          <h3 class="group-title">
+            ${it.title}
+          </h3>
+
+          ${chips}
+
+          <div class="group-actions">
+            <span class="group-status" data-status>${joined ? "참가중" : "미참가"}</span>
+            ${actions}
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  bindGroupButtons();
+}
+
+/* =========================
+   그룹 버튼 바인딩 (참가/탈퇴/이동)
    ========================= */
 function bindGroupButtons(){
   const groupsEl = document.getElementById("groups");
   if(!groupsEl) return;
 
-  groupsEl.querySelectorAll(".group-btn").forEach(btn=>{
+  // 썸네일 이동 막기
+  document.querySelectorAll(".group-card > a").forEach(a=>{
+    a.addEventListener("click", (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    });
+    a.setAttribute("aria-disabled", "true");
+    a.style.cursor = "default";
+    a.style.pointerEvents = "none";
+  });
+
+  groupsEl.querySelectorAll(".group-actions .group-btn, .group-actions .info-btn, .group-actions .move-btn").forEach(btn=>{
     btn.addEventListener("click", async (e)=>{
-      // 링크형 버튼(이동하기)
-      // 미가입이면 선참가(저장) → 링크 이동, 이미 가입이면 바로 이동
-      if (btn.matches("a.group-btn")) {
+      const isLinkBtn = btn.matches("a.group-btn.move-btn");
+      if(isLinkBtn){
         e.preventDefault();
-        e.stopPropagation();
-
-        const key  = btn.dataset.key || btn.closest(".group-card")?.dataset.key;
-        const card = btn.closest(".group-card");
         const link = btn.getAttribute("href");
-
-        if (!link || link === "#") return;
-
-        const joined = card?.getAttribute("data-joined") === "true";
-        if (joined) {
-          openLink(link, { newTab: true });
-          return;
-        }
-
-        // 자유는 기본 참가라 보통 joined=true겠지만, 방어적으로 처리
-        if (key === "free") {
-          openLink(link, { newTab: true });
-          return;
-        }
-
-        // 미가입 → 먼저 저장 후 링크 열기 (iOS 안전 순서)
-        try {
-          // 낙관적 UI: 카드/배지/버튼 갱신
-          card?.setAttribute("data-joined", "true");
-          card?.querySelector(".badge.status")?.classList.remove("none");
-          const sBadge = card?.querySelector(".badge.status");
-          if (sBadge) sBadge.textContent = "참가중";
-          const sText = card?.querySelector("[data-status]");
-          if (sText) sText.textContent = "참가중";
-
-          // 버튼 교체 (참가하기 → 탈퇴하기), 이동하기 버튼 없으면 추가
-          const actionsEl = card?.querySelector(".group-actions");
-          const existsMove = actionsEl?.querySelector(".move-btn");
-          if (!existsMove && actionsEl) {
-            const moveA = document.createElement("a");
-            moveA.className = "group-btn move-btn";
-            moveA.href = link;
-            moveA.target = "_blank";
-            moveA.rel = "noopener";
-            moveA.textContent = "이동하기";
-            actionsEl.appendChild(moveA);
-          }
-          const joinBtn = actionsEl?.querySelector('.group-btn:not(.withdraw-btn):not(.move-btn)');
-          if (joinBtn) {
-            const w = document.createElement("button");
-            w.className = "group-btn withdraw-btn";
-            w.dataset.key = key;
-            w.textContent = "탈퇴하기";
-            joinBtn.replaceWith(w);
-          }
-
-          // DB 저장 먼저
-          await window.toggleGroup?.(key, true);
-          refreshCountsDebounced({ optimisticDelta: { [key]: +1 } });
-
-          // 저장 끝났으면 링크 열기
-          setTimeout(() => openLink(link, { newTab: true }), 30);
-        } catch (err) {
-          console.error("auto-join before move failed:", err);
-          // 롤백
-          card?.setAttribute("data-joined", "false");
-          card?.querySelector(".badge.status")?.classList.add("none");
-          const sBadge2 = card?.querySelector(".badge.status");
-          if (sBadge2) sBadge2.textContent = "미참가";
-          const sText2 = card?.querySelector("[data-status]");
-          if (sText2) sText2.textContent = "미참가";
-          notify("참가에 실패했습니다. 다시 시도해 주세요.");
-        }
+        if(link && link !== "#") openLink(link, { newTab: true });
         return;
       }
 
+      // 참가/탈퇴/안내
+      if(btn.matches(".info-btn")) return;
 
-      // 참가/탈퇴 버튼
       e.preventDefault();
       const key  = btn.dataset.key;
       const card = btn.closest(".group-card");
@@ -267,7 +364,20 @@ function bindGroupButtons(){
       const isWithdraw = btn.classList.contains("withdraw-btn");
       const willJoin   = !isWithdraw;
 
-      // 자유: 탈퇴 금지
+      // ---- '자유' 참가 전 조건: 캠/보/운 중 1개 이상 가입되어 있어야 함 ----
+      if (willJoin && key === "free") {
+        const hasOne = Array.from(groupsEl.querySelectorAll(".group-card")).some(el => {
+          const k = el.dataset.key;
+          return (k === "camp" || k === "board" || k === "sport") && el.getAttribute("data-joined") === "true";
+        });
+        if (!hasOne) {
+          notify("캠핑/보드게임/운동 중 1개 이상 먼저 가입한 뒤 참가할 수 있어요.");
+          return; // 참가 처리 중단
+        }
+      }
+
+
+      // 자유는 필참 → 탈퇴 불가
       if(key === "free" && !willJoin){
         notify("자유는 필참이라 탈퇴할 수 없습니다.");
         return;
@@ -287,6 +397,18 @@ function bindGroupButtons(){
         }
       }
 
+      // ---- 성별 정원 체크 (join 시) ----
+      if (willJoin) {
+        const myGender = window.__userGender; // "남" 또는 "여"
+        if (key === "camp" || key === "board" || key === "sport") {
+          const full = await isGenderFull(key, myGender);
+          if (full) {
+            notify(`${title}의 ${myGender ?? ""} 정원이 마감되었습니다.`);
+            return; // 참가 처리 중단 (UI 변경 없음)
+          }
+        }
+      }
+
       // ===== UI 즉시 반영
       const statusBadge = card.querySelector(".badge.status");
       const statusSpan  = card.querySelector("[data-status]");
@@ -298,14 +420,14 @@ function bindGroupButtons(){
         if(statusBadge) statusBadge.textContent = "참가중";
         if(statusSpan)  statusSpan.textContent  = "참가중";
 
-        // 기존 '참가하기' 버튼을 '탈퇴하기'로 교체
+        // 참가하기 → 탈퇴하기
         const withdrawBtn = document.createElement("button");
         withdrawBtn.className = "group-btn withdraw-btn";
         withdrawBtn.dataset.key = key;
         withdrawBtn.textContent = "탈퇴하기";
         btn.replaceWith(withdrawBtn);
 
-        // 이동하기 버튼이 없으면 만들고 '탈퇴하기' 앞에 끼워 넣기 → [안내, 이동하기, 탈퇴하기]
+        // 이동하기 없으면 추가
         if(!actionsEl.querySelector(".move-btn")){
           const moveA = document.createElement("a");
           moveA.className = "group-btn move-btn";
@@ -328,7 +450,7 @@ function bindGroupButtons(){
         // 이동하기 제거
         actionsEl.querySelector(".move-btn")?.remove();
 
-        // '탈퇴하기' → '참가하기'로 교체
+        // 탈퇴하기 → 참가하기
         const joinBtn = document.createElement("button");
         joinBtn.className = "group-btn";
         joinBtn.dataset.key = key;
@@ -338,49 +460,25 @@ function bindGroupButtons(){
         notify(`${title}에서 탈퇴했습니다.`);
       }
 
-      // 새로 생긴 버튼에 다시 바인딩
+      // 새 버튼도 다시 바인딩
       bindGroupButtons();
 
-      // ===== DB 반영 + 카운트 옵티미스틱 + (참가 시) 링크 오픈
-      const delta = { camp:0, board:0, sport:0 };
-      if(key==="camp")  delta.camp  = willJoin ? +1 : -1;
-      if(key==="board") delta.board = willJoin ? +1 : -1;
-      if(key==="sport") delta.sport = willJoin ? +1 : -1;
-      refreshCountsDebounced({ optimisticDelta: delta });
-
-      // iOS 안전: 저장을 먼저 끝내고 → 링크를 나중에 연다
+      // ===== DB 반영 + 카운트 갱신
       try{
         await window.toggleGroup?.(key, willJoin);
-        refreshCountsDebounced();
-        if (willJoin && linkHref && linkHref !== "#") {
-          // 아주 짧은 지연을 주면 새 탭 전환 시점에서도 안전
-          setTimeout(() => openLink(linkHref, { newTab:true }), 30);
-        }
-      } catch(err){
+        refreshCounts();        // 상단 총원(있으면)
+        refreshCountsGender();  // 칩들
+      }catch(err){
         console.error("toggleGroup failed:", err);
-        refreshCountsDebounced();
+        refreshCounts();
+        refreshCountsGender();
       }
-
     });
   });
-
-  // 썸네일(이미지) 클릭 완전 차단 + 커서 비활성화
-  document.querySelectorAll(".group-card > a").forEach(a=>{
-    a.addEventListener("click", (e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    });
-    a.setAttribute("aria-disabled", "true");
-    a.style.cursor = "default";       // ✅ 커서 기본화 (손모양 안 뜸)
-    a.style.pointerEvents = "none";   // ✅ 완전 클릭 불가 (hover도 차단)
-  });
-
-
 }
 
 /* =========================
-   갤러리 로딩
+   갤러리 (공개)
    ========================= */
 const galleryEl = $("#gallery");
 const imgModal  = $("#imgModal");
@@ -458,65 +556,6 @@ $$("[data-close]").forEach(btn=>{
 });
 
 /* =========================
-   모임 카드 렌더
-   ========================= */
-function renderGroups(joinedSet){
-  const groupsEl = document.getElementById("groups");
-  if(!groupsEl) return;
-
-  const items = [
-    { key:"camp",  title:"캠핑",    img:"image/meeting/sample1.png" },
-    { key:"board", title:"보드게임", img:"image/meeting/sample2.png" },
-    { key:"sport", title:"운동",    img:"image/meeting/sample3.png" },
-    { key:"free",  title:"자유",    img:"image/meeting/sample4.png" },
-  ];
-
-  groupsEl.innerHTML = items.map(it=>{
-    const joined = joinedSet.has(it.key);
-    const badgeNeed  = (it.key==="free")
-      ? `<span class="badge required">필참</span>`
-      : `<span class="badge optional">선택</span>`;
-    const badgeState = joined
-      ? `<span class="badge status">참가중</span>`
-      : `<span class="badge status none">미참가</span>`;
-
-    const link   = GROUP_LINKS[it.key] || "#";
-
-    // joined일 때 버튼 순서를 [안내, 이동하기, 탈퇴하기]로 고정 출력
-    const actions = joined
-      ? `
-        <a class="info-btn" href="guide.html?group=${it.key}" data-key="${it.key}">안내</a>
-        <a class="group-btn move-btn" href="${link}" target="_blank" rel="noopener">이동하기</a>
-        <button class="group-btn withdraw-btn" data-key="${it.key}">탈퇴하기</button>
-      `
-      : `
-        <a class="info-btn" href="guide.html?group=${it.key}" data-key="${it.key}">안내</a>
-        <button class="group-btn" data-key="${it.key}">참가하기</button>
-      `;
-
-    return `
-      <article class="group-card" data-key="${it.key}" data-joined="${joined ? "true":"false"}">
-        <a href="${link}" target="_blank" rel="noopener" title="${it.title}">
-          <img class="group-thumb" src="${it.img}" alt="${it.title}" onerror="this.style.display='none'">
-        </a>
-        <div class="group-body">
-          <h3 class="group-title">
-            ${it.title}
-            ${badgeNeed}
-            ${badgeState}
-          </h3>
-          <div class="group-actions">
-            <span class="group-status" data-status>${joined ? "참가중" : "미참가"}</span>
-            ${actions}
-          </div>
-        </div>
-      </article>`;
-  }).join("");
-
-  bindGroupButtons();
-}
-
-/* =========================
    헤더 (권한별)
    ========================= */
 function setHeaderForRole(role){
@@ -535,7 +574,7 @@ function setHeaderForRole(role){
 }
 
 /* =========================
-   전역: 그룹 토글(DB 반영용)
+   전역: 그룹 토글(DB 반영)
    ========================= */
 window.toggleGroup = async function(key, join){
   const user = auth.currentUser;
@@ -560,13 +599,16 @@ onAuthStateChanged(auth, async (user)=>{
 
   document.body.dataset.auth = "in";
   try{
-    await loadGroupLinks(); // 🔗 외부 링크 로드
+    await loadGroupLinks();
+
     const snap = await getDoc(doc(db,"users", user.uid));
     const data = snap.exists() ? snap.data() : {};
     const role = data?.role || "member";
 
-    // 권한 기반 헤더
     setHeaderForRole(role);
+    // 현재 사용자 성별 전역 저장 (참가 시 정원 체크용)
+    window.__userGender = data?.gender || null;
+
 
     const joinedSet = groupsToSet(data?.groups);
     const subtitle = document.querySelector(".subtitle");
@@ -574,17 +616,24 @@ onAuthStateChanged(auth, async (user)=>{
     if(subtitle) subtitle.textContent = `${name}님, 포니버스에 오신 것을 환영합니다`;
 
     renderGroups(joinedSet);
+
+    // 렌더 직후 칩/카운트 갱신
+    await Promise.resolve();
+    refreshCounts();        // 상단 총원(있으면)
+    refreshCountsGender();  // 카드 칩(자유 포함)
+
   }catch(err){
     console.error("load user failed:", err);
     setHeaderForRole("member");
     renderGroups(new Set());
+    refreshCounts();
+    refreshCountsGender();
   }
 
   $("#groups")?.setAttribute("aria-hidden","false");
   $("#groupsNotice")?.setAttribute("aria-hidden","false");
   $(".page-actions")?.setAttribute("aria-hidden","false");
-  $("#groupsNotice") && ($("#groupsNotice").textContent = "자유는 필참이며, 캠핑/보드게임/운동 중 최소 1개를 선택하세요.");
-  refreshCountsDebounced();
+  $("#groupsNotice") && ($("#groupsNotice").textContent = "자유는 필참이며, 미참가시 탈퇴 처리될 수 있습니다.");
 });
 
 /* =========================
