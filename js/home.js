@@ -30,6 +30,8 @@ const firebaseConfig = {
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
+const ROLE_MEMBER_FILTER = where("role", "==", "member");
+
 
 // 로그인 상태 유지(Local)
 await setPersistence(auth, browserLocalPersistence);
@@ -129,10 +131,11 @@ async function refreshCounts(){
     const reqId = ++__countReqId;
 
     const [campSnap, boardSnap, sportSnap] = await Promise.all([
-      getCountFromServer(query(usersRef, where("groups.camp",  "==", true))),
-      getCountFromServer(query(usersRef, where("groups.board", "==", true))),
-      getCountFromServer(query(usersRef, where("groups.sport", "==", true))),
+      getCountFromServer(query(usersRef, where("groups.camp",  "==", true), ROLE_MEMBER_FILTER)),
+      getCountFromServer(query(usersRef, where("groups.board", "==", true), ROLE_MEMBER_FILTER)),
+      getCountFromServer(query(usersRef, where("groups.sport", "==", true), ROLE_MEMBER_FILTER)),
     ]);
+
 
     if(reqId !== __countReqId) return;
 
@@ -172,9 +175,11 @@ async function isGenderFull(groupKey, gender){
       query(
         usersRef,
         where(`groups.${groupKey}`, "==", true),
+        ROLE_MEMBER_FILTER,
         where("gender", "==", gender)
       )
     );
+
     const n = snap.data().count || 0;
     return n >= LIMIT_GENDER; // 정원 10명
   }catch(e){
@@ -207,15 +212,16 @@ async function refreshCountsGender(){
       sportM, sportF,
       freeM,  freeF
     ] = await Promise.all([
-      getCountFromServer(query(usersRef, where("groups.camp",  "==", true), where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.camp",  "==", true), where("gender","==","여"))),
-      getCountFromServer(query(usersRef, where("groups.board", "==", true), where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.board", "==", true), where("gender","==","여"))),
-      getCountFromServer(query(usersRef, where("groups.sport", "==", true), where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.sport", "==", true), where("gender","==","여"))),
-      getCountFromServer(query(usersRef, where("groups.free",  "==", true), where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.free",  "==", true), where("gender","==","여"))),
+      getCountFromServer(query(usersRef, where("groups.camp",  "==", true), ROLE_MEMBER_FILTER, where("gender","==","남"))),
+      getCountFromServer(query(usersRef, where("groups.camp",  "==", true), ROLE_MEMBER_FILTER, where("gender","==","여"))),
+      getCountFromServer(query(usersRef, where("groups.board", "==", true), ROLE_MEMBER_FILTER, where("gender","==","남"))),
+      getCountFromServer(query(usersRef, where("groups.board", "==", true), ROLE_MEMBER_FILTER, where("gender","==","여"))),
+      getCountFromServer(query(usersRef, where("groups.sport", "==", true), ROLE_MEMBER_FILTER, where("gender","==","남"))),
+      getCountFromServer(query(usersRef, where("groups.sport", "==", true), ROLE_MEMBER_FILTER, where("gender","==","여"))),
+      getCountFromServer(query(usersRef, where("groups.free",  "==", true), ROLE_MEMBER_FILTER, where("gender","==","남"))),
+      getCountFromServer(query(usersRef, where("groups.free",  "==", true), ROLE_MEMBER_FILTER, where("gender","==","여"))),
     ]);
+
 
     if(reqId !== __gReqId) return;
 
@@ -497,8 +503,16 @@ function probeImage(src){
     im.src = src + (src.includes("?") ? "&" : "?") + "v=" + Date.now();
   });
 }
+
+let __currentPage = 1;
+const __perPage = 10;
+let __files = [];
+
+/* ----- 기존 loadPictures를 페이지네이션 구조로 변경 ----- */
 async function loadPictures(){
   if(!galleryEl) return;
+
+  // 1) 파일 목록(list.json) 시도
   let files = null;
   try{
     const res = await fetch("image/photo/list.json", { cache:"no-cache" });
@@ -506,32 +520,45 @@ async function loadPictures(){
       const json = await res.json();
       if(Array.isArray(json)) files = json.map(n => "image/photo/" + n);
     }
-  }catch(_){}
+  }catch{ /* ignore */ }
+
+  // 2) 폴백: sample1~12.(jpg|jpeg|png)
   if(!files){
     const exts = ["jpg","jpeg","png"];
-    const maxN = 12;
+    const maxN = 30; // 필요시 더 확장 가능
     const results = [];
-    let miss = 0;
     for(let i=1;i<=maxN;i++){
-      let found = null;
       for(const ext of exts){
         const src = `image/photo/sample${i}.${ext}`;
         // eslint-disable-next-line no-await-in-loop
         const ok = await probeImage(src);
-        if(ok){ found = src; break; }
+        if(ok){ results.push(src); break; }
       }
-      if(found){ results.push(found); miss = 0; }
-      else { miss++; if(miss >= 3) break; }
     }
     files = results;
   }
+
   if(!files || files.length === 0){
     galleryEl.style.display = "none";
     return;
   }
-  galleryEl.innerHTML = files.map(p=>(
-    `<img class="hover-zoom" src="${p}" alt="pic" onerror="this.style.display='none'">`
-  )).join("");
+
+  __files = files;
+  renderGalleryPage(__currentPage);
+  renderPaginationControls();
+}
+
+/* ----- 페이지 렌더링 ----- */
+function renderGalleryPage(page){
+  const start = (page - 1) * __perPage;
+  const end = start + __perPage;
+  const list = __files.slice(start, end);
+
+  galleryEl.innerHTML = list.map(p => `
+    <img class="hover-zoom" src="${p}" alt="pic"
+         loading="lazy" decoding="async"
+         onerror="this.style.display='none'">
+  `).join("");
 
   galleryEl.querySelectorAll("img").forEach(img=>{
     img.addEventListener("click", ()=>{
@@ -543,6 +570,33 @@ async function loadPictures(){
     });
   });
 }
+
+/* ----- 페이지 버튼 렌더링 ----- */
+function renderPaginationControls(){
+  let pagEl = document.getElementById("galleryPager");
+  if(!pagEl){
+    pagEl = document.createElement("div");
+    pagEl.id = "galleryPager";
+    pagEl.className = "gallery-pager";
+    galleryEl.after(pagEl);
+  }
+
+  const totalPages = Math.ceil(__files.length / __perPage);
+  pagEl.innerHTML = Array.from({length: totalPages}, (_, i)=> i+1)
+    .map(i => `<button class="page-btn${i===__currentPage?" active":""}" data-page="${i}">${i}</button>`)
+    .join("");
+
+  pagEl.querySelectorAll("button").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      __currentPage = parseInt(btn.dataset.page, 10);
+      renderGalleryPage(__currentPage);
+      renderPaginationControls();
+      window.scrollTo({top: galleryEl.offsetTop - 100, behavior:"smooth"});
+    });
+  });
+}
+
+
 loadPictures();
 
 // 모달 닫기

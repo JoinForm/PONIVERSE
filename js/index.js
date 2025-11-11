@@ -5,7 +5,8 @@
    ========================= */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
 import {
-  getFirestore, collection, query, where, getCountFromServer
+  getFirestore, collection, query, where, getCountFromServer,
+  doc, getDoc, setDoc, updateDoc, serverTimestamp, increment
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -41,12 +42,81 @@ function notify(msg){
 }
 
 /* =========================
+   방문자 카운터(1일 1회/브라우저)
+   ========================= */
+function ensureVisitEl(){
+  let el = document.getElementById("visitNote");
+  if(!el){
+    el = document.createElement("p");
+    el.id = "visitNote";
+    el.className = "visit-note";
+
+    // countsLine(모집 상태 라인) 바로 아래 삽입
+    const countsLine = document.getElementById("countsLine") || document.querySelector(".mini-counts");
+    if (countsLine && countsLine.nextElementSibling) {
+      countsLine.parentNode.insertBefore(el, countsLine.nextElementSibling);
+    } else {
+      (countsLine?.parentNode || document.body).appendChild(el);
+    }
+  }
+  return el;
+}
+
+function fmt(n){ return Number(n || 0).toLocaleString("ko-KR"); }
+
+async function showTotalVisitors(){
+  const el = ensureVisitEl();
+  try{
+    const ref = doc(db, "metrics", "visitors");
+    const snap = await getDoc(ref);
+    const total = snap.exists() ? (snap.data().total || 0) : 0;
+    el.innerHTML = `벌써 <span class="visit-num">${fmt(total)}</span>명이 포니버스에 들러주셨어요!`;
+
+  }catch(e){
+    console.warn("[visit] read failed", e);
+    el.textContent = "";
+  }
+}
+function todayId(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+async function recordDailyVisitOnce(){
+  const key = "pv_" + todayId();     // localStorage 키
+  if(localStorage.getItem(key) === "1"){
+    return false; // 오늘 이미 집계됨
+  }
+  // 총합 upsert + 증가
+  const totalRef = doc(db, "metrics", "visitors");
+  await setDoc(totalRef, { total: 0 }, { merge: true });
+  await updateDoc(totalRef, {
+    total: increment(1),
+    updatedAt: serverTimestamp()
+  });
+  // 일자별 증가(선택)
+  const dailyRef = doc(db, "daily_visits", todayId());
+  await setDoc(dailyRef, { count: 0, date: todayId() }, { merge: true });
+  await updateDoc(dailyRef, {
+    count: increment(1),
+    updatedAt: serverTimestamp()
+  });
+  localStorage.setItem(key, "1");
+  return true;
+}
+
+/* =========================
    상단 표기 (모집 상태: 남/여 모집 · 남 모집 · 여 모집 · 마감)
    ========================= */
 const LIMIT_GENDER = 10;
 let __statusReqId = 0;
+let __refreshTimer = null;   // ← 누락 방지용 추가
+let __MALE_ALL_CLOSED   = false;
+let __FEMALE_ALL_CLOSED = false;
+let __ALL_FULL = false;
 
-// 상태 문자열 계산
 function groupStatus(mCount, fCount){
   const mFull = mCount >= LIMIT_GENDER;
   const fFull = fCount >= LIMIT_GENDER;
@@ -56,42 +126,32 @@ function groupStatus(mCount, fCount){
   if (mFull && !fFull)  return "여 모집";
   return "남/여 모집";
 }
-
-// DOM에 상태 넣기 (기존 cnt-..를 재사용)
 function setStatusBadge(id, status){
   const el = document.getElementById(id);
   if (!el) return;
-
   const cls =
     status === "마감"    ? "closed" :
     status === "남 모집" ? "male"   :
     status === "여 모집" ? "female" : "both";
-
   el.className = "status-badge " + cls;
   el.textContent = status;
 }
-
-
-let __MALE_ALL_CLOSED   = false;
-let __FEMALE_ALL_CLOSED = false;
-let __ALL_FULL = false;           // ← 추가
-
 
 async function refreshStatuses(){
   try{
     const reqId = ++__statusReqId;
     const usersRef = collection(db, "users");
 
-    // 남/여 × (캠핑/보드/운동) 카운트
+    // 관리자/운영진 제외: role == "member" 만 카운팅
     const [
       campM, campF, boardM, boardF, sportM, sportF
     ] = await Promise.all([
-      getCountFromServer(query(usersRef, where("groups.camp","==",true),  where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.camp","==",true),  where("gender","==","여"))),
-      getCountFromServer(query(usersRef, where("groups.board","==",true), where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.board","==",true), where("gender","==","여"))),
-      getCountFromServer(query(usersRef, where("groups.sport","==",true), where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.sport","==",true), where("gender","==","여"))),
+      getCountFromServer(query(usersRef, where("groups.camp","==",true),  where("gender","==","남"), where("role","==","member"))),
+      getCountFromServer(query(usersRef, where("groups.camp","==",true),  where("gender","==","여"), where("role","==","member"))),
+      getCountFromServer(query(usersRef, where("groups.board","==",true), where("gender","==","남"), where("role","==","member"))),
+      getCountFromServer(query(usersRef, where("groups.board","==",true), where("gender","==","여"), where("role","==","member"))),
+      getCountFromServer(query(usersRef, where("groups.sport","==",true), where("gender","==","남"), where("role","==","member"))),
+      getCountFromServer(query(usersRef, where("groups.sport","==",true), where("gender","==","여"), where("role","==","member"))),
     ]);
 
     if (reqId !== __statusReqId) return;
@@ -100,46 +160,48 @@ async function refreshStatuses(){
     const bM = boardM.data().count || 0, bF = boardF.data().count || 0;
     const sM = sportM.data().count || 0, sF = sportF.data().count || 0;
 
-    // 1) 상단 텍스트 교체
+    // 상단 상태 배지 교체
     setStatusBadge("st-camp",  groupStatus(cM, cF));
     setStatusBadge("st-board", groupStatus(bM, bF));
     setStatusBadge("st-sport", groupStatus(sM, sF));
 
-
-    // 2) 한쪽 성별이 세 모임 모두 마감인지 플래그
+    // 성별별로 세 모임 모두 마감인지
     __MALE_ALL_CLOSED   = (cM >= LIMIT_GENDER) && (bM >= LIMIT_GENDER) && (sM >= LIMIT_GENDER);
     __FEMALE_ALL_CLOSED = (cF >= LIMIT_GENDER) && (bF >= LIMIT_GENDER) && (sF >= LIMIT_GENDER);
 
-    // 회원가입 버튼 시각 피드백(둘 다 막힌 경우만 흐리게)
+    // 회원가입 버튼 흐리기(둘 다 마감일 때만)
     const signBtn = $("#btnSignUp");
     if (signBtn) {
       const bothClosed = __MALE_ALL_CLOSED && __FEMALE_ALL_CLOSED;
-      __ALL_FULL = bothClosed;          // ← 추가
+      __ALL_FULL = bothClosed;
       signBtn.setAttribute("aria-disabled", bothClosed ? "true" : "false");
       signBtn.style.opacity = bothClosed ? "0.65" : "";
     }
 
-    // signup 페이지에서 쓸 수 있게 세션 공유(선택)
+    // signup 페이지에서 활용할 수 있게 세션 공유(선택)
     sessionStorage.setItem("__MALE_ALL_CLOSED",   JSON.stringify(__MALE_ALL_CLOSED));
     sessionStorage.setItem("__FEMALE_ALL_CLOSED", JSON.stringify(__FEMALE_ALL_CLOSED));
   }catch(err){
     console.error("[refreshStatuses] failed:", err);
   }
 }
-
 function refreshStatusesDebounced(){
   clearTimeout(__refreshTimer);
   __refreshTimer = setTimeout(()=>refreshStatuses(), 60);
 }
 
-// 최초/재진입/재연결 시 집계
+// 최초/재진입/재연결 + 방문자 카운터
 document.addEventListener("DOMContentLoaded", refreshStatuses);
+document.addEventListener("DOMContentLoaded", async ()=>{
+  await showTotalVisitors();                 // 합계 표시
+  const added = await recordDailyVisitOnce();// 오늘 첫 방문이면 증가
+  if(added) await showTotalVisitors();       // 증가 후 다시 표시
+});
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") refreshStatusesDebounced(); });
 window.addEventListener("online", refreshStatusesDebounced);
 
-
 /* =========================
-   갤러리 (공개)
+   갤러리 (공개) — 10개 단위 페이지네이션
    ========================= */
 const galleryEl = $("#gallery");
 const imgModal  = $("#imgModal");
@@ -150,21 +212,23 @@ function hideImgModal(){
   imgModal.setAttribute("aria-hidden", "true");
   imgModal.setAttribute("hidden", "");
 }
-
 function probeImage(src){
   return new Promise(resolve=>{
     const im = new Image();
     im.onload  = ()=> resolve(src);
     im.onerror = ()=> resolve(null);
-    // 캐시 우회
     im.src = src + (src.includes("?") ? "&" : "?") + "v=" + Date.now();
   });
 }
 
+let __currentPage = 1;
+const __perPage = 10;
+let __files = [];
+
 async function loadPictures(){
   if(!galleryEl) return;
 
-  // 1) 파일 목록(list.json) 시도
+  // 1) list.json 우선
   let files = null;
   try{
     const res = await fetch("image/photo/list.json", { cache:"no-cache" });
@@ -174,22 +238,18 @@ async function loadPictures(){
     }
   }catch{ /* ignore */ }
 
-  // 2) 폴백: sample1~12.(jpg|jpeg|png) 스캔
+  // 2) 폴백: sample1~N.(jpg|jpeg|png)
   if(!files){
     const exts = ["jpg","jpeg","png"];
-    const maxN = 12;
+    const maxN = 30; // 필요에 따라 확장
     const results = [];
-    let miss = 0;
     for(let i=1;i<=maxN;i++){
-      let found = null;
       for(const ext of exts){
         const src = `image/photo/sample${i}.${ext}`;
         // eslint-disable-next-line no-await-in-loop
         const ok = await probeImage(src);
-        if(ok){ found = src; break; }
+        if(ok){ results.push(src); break; }
       }
-      if(found){ results.push(found); miss = 0; }
-      else { miss++; if(miss >= 3) break; } // 연속 누락 3회면 종료
     }
     files = results;
   }
@@ -199,7 +259,17 @@ async function loadPictures(){
     return;
   }
 
-  galleryEl.innerHTML = files.map(p => `
+  __files = files;
+  renderGalleryPage(__currentPage);
+  renderPaginationControls();
+}
+
+function renderGalleryPage(page){
+  const start = (page - 1) * __perPage;
+  const end = start + __perPage;
+  const list = __files.slice(start, end);
+
+  galleryEl.innerHTML = list.map(p => `
     <img class="hover-zoom" src="${p}" alt="pic"
          loading="lazy" decoding="async"
          onerror="this.style.display='none'">
@@ -216,13 +286,33 @@ async function loadPictures(){
   });
 }
 
-// 이미지 모달 닫기
-imgModal && imgModal.addEventListener("click", e=>{
-  if(e.target === imgModal) hideImgModal();
-});
-document.addEventListener("keydown", (e)=>{
-  if(e.key === "Escape") hideImgModal();
-});
+function renderPaginationControls(){
+  let pagEl = document.getElementById("galleryPager");
+  if(!pagEl){
+    pagEl = document.createElement("div");
+    pagEl.id = "galleryPager";
+    pagEl.className = "gallery-pager";
+    galleryEl.after(pagEl);
+  }
+
+  const totalPages = Math.ceil(__files.length / __perPage);
+  pagEl.innerHTML = Array.from({length: totalPages}, (_, i)=> i+1)
+    .map(i => `<button class="page-btn${i===__currentPage?" active":""}" data-page="${i}">${i}</button>`)
+    .join("");
+
+  pagEl.querySelectorAll("button").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      __currentPage = parseInt(btn.dataset.page, 10);
+      renderGalleryPage(__currentPage);
+      renderPaginationControls();
+      window.scrollTo({top: galleryEl.offsetTop - 100, behavior:"smooth"});
+    });
+  });
+}
+
+// 모달 닫기
+imgModal && imgModal.addEventListener("click", e=>{ if(e.target === imgModal) hideImgModal(); });
+document.addEventListener("keydown", (e)=>{ if(e.key === "Escape") hideImgModal(); });
 $$("[data-close]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     const id = btn.getAttribute("data-close");
@@ -238,7 +328,6 @@ loadPictures();
    (동의해야 회원가입 이동, 정원마감 시 차단)
    ========================= */
 function openSignupGate(){
-  // 모든 모임 정원 마감 → 안내만
   if (__ALL_FULL) {
     notify("정원마감으로 모집이 종료되었습니다.");
     return;
@@ -251,7 +340,6 @@ function openSignupGate(){
   document.body.style.overflow = "hidden";
   setTimeout(()=> p && p.focus(), 0);
 }
-
 function closeSignupGate(){
   const m = $("#signupGate");
   if(!m) return;
@@ -272,7 +360,6 @@ function closeSignupGate(){
   // 회원가입 버튼
   btnOpen.addEventListener("click", (e)=>{
     e.preventDefault();
-    // 정원 마감 여부는 openSignupGate 내부에서 체크
     if (modal && agree && goBtn) {
       agree.checked = false;
       goBtn.disabled = true;
