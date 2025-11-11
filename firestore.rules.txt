@@ -1,26 +1,41 @@
-// Firestore 규칙 예시
+// Firestore rules
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() { return request.auth != null; }
-    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
-    function myRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+
+    // 누적 방문자: /metrics/visitors
+    match /metrics/visitors {
+      allow read: if true;
+
+      // create는 total 필드만 만들도록, update는 total을 정확히 +1만 허용
+      allow create: if request.resource.data.keys().hasOnly(['total', 'updatedAt'])
+                    && request.resource.data.total >= 0;
+
+      allow update: if request.resource.data.keys().hasOnly(['total','updatedAt'])
+                    && resource.data.total is int
+                    && request.resource.data.total == resource.data.total + 1;
     }
-    match /users/{uid} {
-      allow read: if isOwner(uid);
-      allow create: if isOwner(uid)
-        && (
-          !('role' in request.resource.data) ||
-          request.resource.data.role == 'member' ||
-          (isSignedIn() && myRole() == 'master')
-        );
-      allow update: if isOwner(uid)
-        && (
-          !('role' in request.resource.data.diff(resource.data).changedKeys()) ||
-          (isSignedIn() && myRole() == 'master')
-        );
-      allow delete: if isOwner(uid);
+
+    // 일자별 집계: /daily_visits/{dateId}  (예: 2025-11-11)
+    match /daily_visits/{dateId} {
+      allow read: if true;
+
+      // create: count 초기 생성만 허용 (0 이상)
+      allow create: if request.resource.data.keys().hasOnly(['count','date','updatedAt'])
+                    && request.resource.data.date == dateId
+                    && request.resource.data.count >= 0;
+
+      // update: count 정확히 +1만 허용
+      allow update: if request.resource.data.keys().hasOnly(['count','date','updatedAt'])
+                    && request.resource.data.date == dateId
+                    && resource.data.count is int
+                    && request.resource.data.count == resource.data.count + 1;
+    }
+
+    // 그 외는 기본 거부
+    match /{document=**} {
+      allow read: if false;
+      allow write: if false;
     }
   }
 }
