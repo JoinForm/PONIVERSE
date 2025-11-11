@@ -444,3 +444,89 @@ input, select, textarea{ overflow:visible !important; touch-action:pan-y; }
   transform: translateY(-2px);
 }
 
+/* ===== 버튼 영역 반응형 (모든 페이지 공통) ===== */
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;              /* 👉 줄바꿈 허용 */
+  justify-content: center;
+  gap: 10px 14px;               /* 세로/가로 간격 */
+  margin-top: 10px;
+  max-width: 90%;
+  margin-inline: auto;
+}
+
+/* 버튼 공통 크기 조정 */
+.btn {
+  flex: 1 1 auto;               /* 👉 공간 따라 크기 자동 조절 */
+  min-width: 120px;             /* 최소 버튼 크기 */
+  padding: clamp(8px, 2vw, 12px) clamp(16px, 3vw, 28px); /* 반응형 여백 */
+  font-size: clamp(13px, 3.5vw, 17px);                   /* 반응형 글자 크기 */
+  border-radius: 999px;
+  transition: all 0.25s ease;
+  text-align: center;
+  white-space: nowrap;          /* 글자 줄바꿈 방지 */
+}
+
+/* 버튼 기본 스타일 유지 */
+.btn.primary,
+#btnSignUp.btn {
+  background: linear-gradient(135deg, #66d1ff 0%, #a58cff 100%);
+  color: #fff;
+  font-weight: 700;
+  border: none;
+}
+.btn.primary:hover,
+#btnSignUp.btn:hover {
+  background: linear-gradient(135deg, #7bd8ff 0%, #bca0ff 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(102,209,255,.35);
+}
+
+.btn.ghost,
+.btn.kakao {
+  background: transparent;
+  border: 2px solid rgba(255,255,255,0.25);
+  color: #e8f0ff;
+  font-weight: 600;
+}
+.btn.ghost:hover,
+.btn.kakao:hover {
+  border-color: rgba(255,255,255,0.6);
+  color: #fff;
+  background: rgba(255,255,255,0.08);
+  transform: translateY(-2px);
+}
+
+/* home의 회원관리 버튼 (그라데이션) */
+#manageBtn.btn {
+  background: linear-gradient(135deg, #66d1ff 0%, #a58cff 100%);
+  color: #fff;
+  font-weight: 700;
+  border: none;
+}
+#manageBtn.btn:hover {
+  background: linear-gradient(135deg, #7bd8ff 0%, #bca0ff 100%);
+  transform: translateY(-2px);
+}
+
+/* 비활성화 버튼 */
+.btn[disabled],
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ===== 작은 화면용 조정 ===== */
+@media (max-width: 560px) {
+  .btn-row {
+    flex-direction: row;
+    gap: 8px 10px;
+  }
+  .btn {
+    flex: 1 1 45%;   /* 👉 작은 화면에서는 두 줄로 자동 배치 */
+    font-size: clamp(12px, 4vw, 15px);
+    min-width: 100px;
+  }
+}
