@@ -427,3 +427,20 @@ body.non-master th.col-role,  body.non-master td.col-role,  body.non-master col.
 }
 input, select, textarea{ overflow:visible !important; touch-action:pan-y; }
 @supports (overscroll-behavior:auto){ html, body{ overscroll-behavior:auto; } }
+
+/* 1:1 문의 버튼 — 로그인/로그아웃과 동일한 디자인 */
+.btn.kakao {
+  background: transparent;
+  border: 2px solid rgba(255,255,255,0.25);
+  color: #e8f0ff;
+  font-weight: 600;
+  transition: all 0.25s ease;
+}
+
+.btn.kakao:hover {
+  border-color: rgba(255,255,255,0.6);
+  color: #fff;
+  background: rgba(255,255,255,0.08);
+  transform: translateY(-2px);
+}
+

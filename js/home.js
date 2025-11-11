@@ -619,8 +619,10 @@ function setHeaderForRole(role){
   btnRow.innerHTML = `
     <a id="noticeBtn" class="btn primary" href="notice.html">공지사항</a>
     ${isAdmin ? `<a id="manageBtn" class="btn" href="members.html">회원관리</a>` : ``}
+    <a id="qaBtn" class="btn kakao" href="https://open.kakao.com/o/s24gqv1h" target="_blank" rel="noopener">1:1 문의</a>
     <button id="logoutBtn" class="btn ghost" type="button">로그아웃</button>
   `;
+
   $("#logoutBtn")?.addEventListener("click", async ()=>{
     try{ await signOut(auth); notify("로그아웃되었습니다."); }
     catch(e){ console.error(e); notify("로그아웃 실패"); }
