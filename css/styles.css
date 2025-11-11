@@ -530,3 +530,18 @@ input, select, textarea{ overflow:visible !important; touch-action:pan-y; }
     min-width: 100px;
   }
 }
+
+/* ===== Footer ===== */
+.site-footer {
+  text-align: center;
+  color: rgba(232, 240, 255, 0.7);
+  font-size: clamp(0.8rem, 1.5vw, 1rem);
+  padding: 2rem 1rem 1.5rem;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  margin-top: 4rem;
+  line-height: 1.6;
+}
+
+.site-footer strong {
+  color: var(--accent);
+}

@@ -1,41 +1,51 @@
-// Firestore rules
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 누적 방문자: /metrics/visitors
+    // ─────────────────────────────────────────────
+    // ① 누적 방문자 합계  (/metrics/visitors)
+    // ─────────────────────────────────────────────
     match /metrics/visitors {
+      // 누구나 합계(total) 읽기 가능
       allow read: if true;
 
-      // create는 total 필드만 만들도록, update는 total을 정확히 +1만 허용
-      allow create: if request.resource.data.keys().hasOnly(['total', 'updatedAt'])
-                    && request.resource.data.total >= 0;
-
-      allow update: if request.resource.data.keys().hasOnly(['total','updatedAt'])
-                    && resource.data.total is int
-                    && request.resource.data.total == resource.data.total + 1;
+      // 익명 접근만 + 허용 필드만 (total, updatedAt)
+      allow create, update: if request.auth == null
+                            && request.resource.data.keys().hasOnly(['total','updatedAt']);
+      allow delete: if false;
     }
 
-    // 일자별 집계: /daily_visits/{dateId}  (예: 2025-11-11)
+    // ─────────────────────────────────────────────
+    // ② 일자별 방문자 집계 (/daily_visits/{YYYY-MM-DD})
+    // ─────────────────────────────────────────────
     match /daily_visits/{dateId} {
       allow read: if true;
 
-      // create: count 초기 생성만 허용 (0 이상)
-      allow create: if request.resource.data.keys().hasOnly(['count','date','updatedAt'])
-                    && request.resource.data.date == dateId
-                    && request.resource.data.count >= 0;
-
-      // update: count 정확히 +1만 허용
-      allow update: if request.resource.data.keys().hasOnly(['count','date','updatedAt'])
-                    && request.resource.data.date == dateId
-                    && resource.data.count is int
-                    && request.resource.data.count == resource.data.count + 1;
+      // 익명 접근만 + date 필드가 문서ID와 동일해야 함
+      allow create, update: if request.auth == null
+                            && request.resource.data.keys().hasOnly(['count','date','updatedAt'])
+                            && request.resource.data.date == dateId;
+      allow delete: if false;
     }
 
-    // 그 외는 기본 거부
-    match /{document=**} {
-      allow read: if false;
+    // ─────────────────────────────────────────────
+    // ③ 회원 데이터 (/users/{uid})
+    // ─────────────────────────────────────────────
+    // getCountFromServer() 호출용 집계 쿼리 전용.
+    // - list: 허용 (카운트용)
+    // - get: 금지 (개별 문서 열람 차단)
+    // - write: 금지 (직접 수정 방지)
+    match /users/{uid} {
+      allow list: if true;
+      allow get: if false;
       allow write: if false;
+    }
+
+    // ─────────────────────────────────────────────
+    // ④ 기타 모든 문서 접근 차단
+    // ─────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -1,4 +1,4 @@
-// js/index.js — 로그아웃 전용 (카운트 + 갤러리 + 가입조건 게이트 + 정원마감 안내)
+// js/index.js — 로그아웃 전용 (모집 상태 카운트 · 방문자 카운트 · 갤러리 · 가입조건 게이트 · 1:1 문의 버튼)
 
 /* =========================
    Firebase (읽기 전용)
@@ -42,7 +42,7 @@ function notify(msg){
 }
 
 /* =========================
-   방문자 카운터(1일 1회/브라우저)
+   방문자 카운터(브라우저당 1일 1회)
    ========================= */
 function ensureVisitEl(){
   let el = document.getElementById("visitNote");
@@ -55,8 +55,7 @@ function ensureVisitEl(){
   }
   return el;
 }
-
-function fmt(n){ return Number(n || 0).toLocaleString("ko-KR"); }
+const fmt = n => Number(n || 0).toLocaleString("ko-KR");
 
 async function showTotalVisitors(){
   const el = ensureVisitEl();
@@ -70,49 +69,49 @@ async function showTotalVisitors(){
     el.textContent = "";
   }
 }
-
 function todayId(){
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
-
 async function recordDailyVisitOnce(){
   const key = "pv_" + todayId();
   if(localStorage.getItem(key) === "1") return false;
 
-  try {
-    const totalRef = doc(db, "metrics", "visitors");
-    await setDoc(totalRef, { total: 0 }, { merge: true });
-    await updateDoc(totalRef, {
-      total: increment(1),
-      updatedAt: serverTimestamp()
-    });
+  try{
+    // ✅ 누적 방문자 +1 (한 번의 setDoc으로 처리)
+    await setDoc(
+      doc(db, "metrics", "visitors"),
+      { total: increment(1), updatedAt: serverTimestamp() },
+      { merge: true }
+    );
 
-    const dailyRef = doc(db, "daily_visits", todayId());
-    await setDoc(dailyRef, { count: 0, date: todayId() }, { merge: true });
-    await updateDoc(dailyRef, {
-      count: increment(1),
-      updatedAt: serverTimestamp()
-    });
+    // ✅ 일자별 +1 (한 번의 setDoc으로 처리)
+    const dateId = todayId();
+    await setDoc(
+      doc(db, "daily_visits", dateId),
+      { date: dateId, count: increment(1), updatedAt: serverTimestamp() },
+      { merge: true }
+    );
+
 
     localStorage.setItem(key, "1");
     return true;
-  } catch (err) {
+  }catch(err){
     console.error("[visit] increment failed:", err);
-    notify("방문 카운트 저장이 차단되었습니다(보안 규칙 확인).");
+    notify("방문 카운트 저장이 차단되었습니다. (보안 규칙 확인)");
     return false;
   }
 }
 
 /* =========================
-   상단 표기 (모집 상태)
+   상단 모집 상태 카운트
    ========================= */
 const LIMIT_GENDER = 10;
 let __statusReqId = 0;
 let __refreshTimer = null;
 let __MALE_ALL_CLOSED   = false;
 let __FEMALE_ALL_CLOSED = false;
-let __ALL_FULL = false;
+let __ALL_FULL          = false;
 
 function groupStatus(mCount, fCount){
   const mFull = mCount >= LIMIT_GENDER;
@@ -123,7 +122,6 @@ function groupStatus(mCount, fCount){
   if (mFull && !fFull)  return "여 모집";
   return "남/여 모집";
 }
-
 function setStatusBadge(id, status){
   const el = document.getElementById(id);
   if (!el) return;
@@ -134,11 +132,11 @@ function setStatusBadge(id, status){
   el.className = "status-badge " + cls;
   el.textContent = status;
 }
-
 async function refreshStatuses(){
   try{
     const reqId = ++__statusReqId;
     const usersRef = collection(db, "users");
+    // 운영/관리자 제외: role=="member"만 카운트
     const [
       campM, campF, boardM, boardF, sportM, sportF
     ] = await Promise.all([
@@ -149,8 +147,8 @@ async function refreshStatuses(){
       getCountFromServer(query(usersRef, where("groups.sport","==",true), where("gender","==","남"), where("role","==","member"))),
       getCountFromServer(query(usersRef, where("groups.sport","==",true), where("gender","==","여"), where("role","==","member"))),
     ]);
-
     if (reqId !== __statusReqId) return;
+
     const cM = campM.data().count || 0, cF = campF.data().count || 0;
     const bM = boardM.data().count || 0, bF = boardF.data().count || 0;
     const sM = sportM.data().count || 0, sF = sportF.data().count || 0;
@@ -173,37 +171,33 @@ async function refreshStatuses(){
     console.error("[refreshStatuses] failed:", err);
   }
 }
-
 function refreshStatusesDebounced(){
   clearTimeout(__refreshTimer);
   __refreshTimer = setTimeout(()=>refreshStatuses(), 60);
 }
 
-document.addEventListener("DOMContentLoaded", refreshStatuses);
-document.addEventListener("DOMContentLoaded", async ()=>{
-  await showTotalVisitors();
-  const added = await recordDailyVisitOnce();
-  if(added) await showTotalVisitors();
-});
-document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") refreshStatusesDebounced(); });
-window.addEventListener("online", refreshStatusesDebounced);
-
 /* =========================
    1:1 문의 버튼 (카카오톡)
    ========================= */
 document.addEventListener("DOMContentLoaded", ()=>{
-  const kakaoBtn = document.createElement("button");
-  kakaoBtn.className = "btn ghost";
-  kakaoBtn.textContent = "1:1 문의";
-  kakaoBtn.addEventListener("click", ()=> window.open("https://open.kakao.com/o/s24gqv1h", "_blank"));
+  // 중복 생성 방지
+  if (document.getElementById("btnKakao")) return;
 
-  const loginBtn = document.getElementById("btnLogin");
+  const btn = document.createElement("button");
+  btn.className = "btn ghost";
+  btn.id = "btnKakao";
+  btn.type = "button";
+  btn.textContent = "1:1 문의";
+  btn.addEventListener("click", ()=> window.open("https://open.kakao.com/o/s24gqv1h", "_blank", "noopener"));
+
+  const loginBtn  = document.getElementById("btnLogin");
   const logoutBtn = document.getElementById("btnLogout");
 
-  if (loginBtn && loginBtn.parentNode) {
-    loginBtn.parentNode.insertBefore(kakaoBtn, loginBtn.nextSibling);
-  } else if (logoutBtn && logoutBtn.parentNode) {
-    logoutBtn.parentNode.insertBefore(kakaoBtn, logoutBtn);
+  // home: 로그아웃 왼쪽 / index: 로그인 오른쪽
+  if (logoutBtn && logoutBtn.parentNode){
+    logoutBtn.parentNode.insertBefore(btn, logoutBtn);           // home
+  } else if (loginBtn && loginBtn.parentNode){
+    loginBtn.parentNode.insertBefore(btn, loginBtn.nextSibling); // index
   }
 });
 
@@ -219,7 +213,6 @@ function hideImgModal(){
   imgModal.setAttribute("aria-hidden", "true");
   imgModal.setAttribute("hidden", "");
 }
-
 function probeImage(src){
   return new Promise(resolve=>{
     const im = new Image();
@@ -235,6 +228,8 @@ let __files = [];
 
 async function loadPictures(){
   if(!galleryEl) return;
+
+  // 1) image/photo/list.json 우선
   let files = null;
   try{
     const res = await fetch("image/photo/list.json", { cache:"no-cache" });
@@ -242,8 +237,9 @@ async function loadPictures(){
       const json = await res.json();
       if(Array.isArray(json)) files = json.map(n => "image/photo/" + n);
     }
-  }catch{ /* ignore */ }
+  }catch{/* ignore */}
 
+  // 2) 폴백: sample1~N.(jpg|jpeg|png)
   if(!files){
     const exts = ["jpg","jpeg","png"];
     const maxN = 30;
@@ -251,6 +247,7 @@ async function loadPictures(){
     for(let i=1;i<=maxN;i++){
       for(const ext of exts){
         const src = `image/photo/sample${i}.${ext}`;
+        // eslint-disable-next-line no-await-in-loop
         const ok = await probeImage(src);
         if(ok){ results.push(src); break; }
       }
@@ -267,12 +264,15 @@ async function loadPictures(){
   renderGalleryPage(__currentPage);
   renderPaginationControls();
 }
-
 function renderGalleryPage(page){
   const start = (page - 1) * __perPage;
-  const end = start + __perPage;
-  const list = __files.slice(start, end);
-  galleryEl.innerHTML = list.map(p => `<img class="hover-zoom" src="${p}" alt="pic" loading="lazy">`).join("");
+  const end   = start + __perPage;
+  const list  = __files.slice(start, end);
+
+  galleryEl.innerHTML = list.map(p => `
+    <img class="hover-zoom" src="${p}" alt="pic" loading="lazy" decoding="async">
+  `).join("");
+
   galleryEl.querySelectorAll("img").forEach(img=>{
     img.addEventListener("click", ()=>{
       if(modalImg && imgModal){
@@ -283,7 +283,6 @@ function renderGalleryPage(page){
     });
   });
 }
-
 function renderPaginationControls(){
   let pagEl = document.getElementById("galleryPager");
   if(!pagEl){
@@ -292,23 +291,25 @@ function renderPaginationControls(){
     pagEl.className = "gallery-pager";
     galleryEl.after(pagEl);
   }
+
   const totalPages = Math.ceil(__files.length / __perPage);
   pagEl.innerHTML = Array.from({length: totalPages}, (_, i)=> i+1)
-    .map(i => `<button class="page-btn${i===__currentPage?" active":""}" data-page="${i}">${i}</button>`).join("");
+    .map(i => `<button class="page-btn${i===__currentPage?" active":""}" data-page="${i}">${i}</button>`)
+    .join("");
+
   pagEl.querySelectorAll("button").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       __currentPage = parseInt(btn.dataset.page, 10);
       renderGalleryPage(__currentPage);
       renderPaginationControls();
-      window.scrollTo({top: galleryEl.offsetTop - 100, behavior:"smooth"});
+      window.scrollTo({ top: galleryEl.offsetTop - 100, behavior:"smooth" });
     });
   });
 }
 
+// 모달 닫기
 imgModal && imgModal.addEventListener("click", e=>{ if(e.target === imgModal) hideImgModal(); });
 document.addEventListener("keydown", e=>{ if(e.key === "Escape") hideImgModal(); });
-
-loadPictures();
 
 /* =========================
    가입조건 게이트 모달
@@ -319,7 +320,7 @@ function openSignupGate(){
     return;
   }
   const m = $("#signupGate");
-  if(!m){ location.href = "signup.html"; return; }
+  if(!m){ location.href = "signup.html"; return; } // 모달 없으면 바로 이동
   const p = m.querySelector(".modal__panel");
   m.classList.add("is-open");
   m.setAttribute("aria-hidden", "false");
@@ -333,13 +334,14 @@ function closeSignupGate(){
   m.setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
 }
-
 (function bindSignupGateUI(){
   const btnOpen = $("#btnSignUp");
   if(!btnOpen) return;
+
   const modal = $("#signupGate");
   const agree = $("#agreeChk");
   const goBtn = $("#goSignup");
+
   btnOpen.addEventListener("click", (e)=>{
     e.preventDefault();
     if (modal && agree && goBtn) {
@@ -348,6 +350,7 @@ function closeSignupGate(){
     }
     openSignupGate();
   });
+
   if(modal && agree && goBtn){
     agree.addEventListener("change", ()=>{ goBtn.disabled = !agree.checked; });
     goBtn.addEventListener("click", ()=>{
@@ -363,3 +366,20 @@ function closeSignupGate(){
     });
   }
 })();
+
+/* =========================
+   초기 실행
+   ========================= */
+document.addEventListener("DOMContentLoaded", refreshStatuses);
+document.addEventListener("DOMContentLoaded", async ()=>{
+  await showTotalVisitors();                // 합계 표시
+  const added = await recordDailyVisitOnce(); // 오늘 첫 방문이면 +1
+  if(added) await showTotalVisitors();      // 반영 후 다시 표시
+});
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState==="visible") refreshStatusesDebounced();
+});
+window.addEventListener("online", refreshStatusesDebounced);
+
+// 갤러리 로드
+loadPictures();
