@@ -174,7 +174,7 @@ h1{
   box-shadow:0 6px 18px rgba(102,209,255,.35);
 }
 
-/* 고스트/카카오 */
+/* 고스트/카카오 (기본 틀) */
 .btn.ghost,
 .btn.kakao{
   background:transparent;
@@ -380,7 +380,7 @@ h1{
   flex-wrap:wrap;
   gap:10px;
   justify-content:center;
-  padding:10px 12px 14px;
+  padding:10px 0px 14px;
 }
 .modal-actions .btn{
   flex:1 1 160px;
@@ -879,7 +879,7 @@ body.non-master col.col-role{
 
 /* Motion reduce */
 @media (prefers-reduced-motion:reduce){
-  *{ animation:none !important; transition:none !important; }
+  *{ animation:none !important; transition:none !Important; }
 }
 
 /* Page header spacing */
@@ -918,3 +918,71 @@ textarea{
   line-height:1.6;
 }
 .site-footer strong{ color:var(--accent); }
+
+/* =========================
+   Signup / Kakao Join Specific
+   ========================= */
+
+/* 안내 문구 (카카오 + 추가정보 공통) */
+.info-text{
+  text-align:center;
+  font-size:0.95rem;
+  color:aquamarine;
+  margin:4px 0 12px;   /* 위 여백 줄이기 */
+  letter-spacing:-0.2px;
+  font-weight:600;
+}
+
+/* 카카오 전용 노란 버튼 */
+.kakao-btn{
+  width:100%;
+  background:#FEE500 !important;
+  color:#3C1E1E !important;
+  border:none !important;
+  font-weight:600;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:14px;
+}
+.kakao-btn span.emoji{
+  font-size:1.1rem;
+}
+.kakao-btn:hover{
+  background:#f5d900 !important;
+}
+
+/* 추가 정보 안내문구 여백 조정 */
+#signupForm{
+  margin-top:8px;
+}
+#formGuideMsg{
+  margin-top:0;
+  margin-bottom:16px;
+}
+
+/* 개인정보 동의 박스 + 체크박스 정렬 */
+.privacy-box{
+  margin-top:12px;
+  padding:8px;
+  border-radius:8px;
+  border:1px solid #555;
+  font-size:0.85rem;
+  background:rgba(0,0,0,0.25);
+}
+.privacy-box label{
+  display:flex;
+  align-items:center;
+  gap:8px;        /* 체크박스와 문구 사이 간격 */
+  margin-top:8px;
+}
+.privacy-box input[type="checkbox"]{
+  margin:0;
+}
+
+/* 로그인 페이지: 취소 버튼을 카카오 버튼처럼 가로 100%로 */
+.login-page .modal-actions .btn{
+  flex:0 0 100%;
+  width:100%;
+}

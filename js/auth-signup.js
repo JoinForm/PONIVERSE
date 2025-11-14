@@ -1,7 +1,8 @@
-// js/auth-signup.js (module) — 아이디/연락처 중복 체크 + 가입 후 home 이동
+// js/auth-signup.js — 카카오 로그인 + 추가 정보 입력 + DB 저장
 import {
   auth, db,
   createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   updateProfile,
   doc, setDoc, serverTimestamp,
   collection, getDocs, query, where, limit
@@ -10,7 +11,9 @@ import {
 const LIMIT_GENDER = 10;
 const groupKeys = ["camp","board","sport"];
 
-// 세 모임 모두 특정 성별이 마감인지 확인
+// ────────────────────────────────────────
+//  세 모임 모두 특정 성별이 마감인지 확인
+// ────────────────────────────────────────
 async function isGenderAllClosed(gender){
   try{
     const counts = await Promise.all(
@@ -24,44 +27,60 @@ async function isGenderAllClosed(gender){
         )
       )
     );
-    // getDocs로 했으니 size 비교, 성능 더 중요하면 getCountFromServer로 변경 가능
     return counts.every(snap => (snap.size || 0) >= LIMIT_GENDER);
   }catch(e){
     console.error("[isGenderAllClosed] failed:", e);
-    return false; // 장애 시 차단하지 않음
+    return false;
   }
 }
 
-
-// ====== 도우미 ======
+// ────────────────────────────────────────
+//  도우미 함수
+// ────────────────────────────────────────
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 
 function normalizePhone(v) { return (v || "").replace(/\D/g, ""); }
 function formatPhone(v) {
   const d = normalizePhone(v);
   if (d.startsWith("02")) {
-    return d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*/, (_, a, b, c) => [a, b, c].filter(Boolean).join("-"));
+    return d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*/, (_, a, b, c) =>
+      [a, b, c].filter(Boolean).join("-")
+    );
   }
-  return d.replace(/^(\d{0,3})(\d{0,4})(\d{0,4}).*/, (_, a, b, c) => [a, b, c].filter(Boolean).join("-"));
+  return d.replace(/^(\d{0,3})(\d{0,4})(\d{0,4}).*/, (_, a, b, c) =>
+    [a, b, c].filter(Boolean).join("-")
+  );
 }
 
-function cleanUserId(userId) {
-  // 소문자/숫자/언더스코어만 허용
-  return (userId || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+function makeEmailFromKakaoId(kakaoId){
+  return `kakao_${kakaoId}@poniverse.kr`;
+}
+function makePasswordFromKakaoId(kakaoId){
+  return `kakao_${kakaoId}_pw`;
 }
 
-function makeFakeEmailFromId(userId) {
-  return `${cleanUserId(userId)}@poniverse.kr`;
-}
+// ────────────────────────────────────────
+//  DOM 요소
+// ────────────────────────────────────────
+const form             = document.getElementById("signupForm");
+const formGuideMsg     = document.getElementById("formGuideMsg");
+const kakaoBtn         = document.getElementById("kakaoLoginBtn");
+const cancelTopWrapper = document.getElementById("cancelTopWrapper");
+const cancelTopBtn     = document.getElementById("cancelBtnTop");   // ★ 추가
+const cancelFormBtn    = document.getElementById("cancelBtnForm");
+const phoneInput       = $("input[name='phone']");
+const kakaoStatus      = document.getElementById("kakaoStatus");
+const msgBox           = document.getElementById("signupMsg");
 
-const form   = document.getElementById("signupForm");
-const phoneInput = $("input[name='phone']");
-const msgBox = document.createElement("div");
-msgBox.style.marginTop = "8px";
-msgBox.style.textAlign = "center";
-form.appendChild(msgBox);
 
 function showMsg(msg, color = "salmon") {
+  if (!msgBox) return;
+  if (!msg) {
+    msgBox.style.display = "none";
+    msgBox.textContent = "";
+    return;
+  }
+  msgBox.style.display = "block";
   msgBox.style.color = color;
   msgBox.textContent = msg;
 }
@@ -73,63 +92,140 @@ if (phoneInput) {
   });
 }
 
-// ====== 제출 처리 ======
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
+// 폼 비활성화 상태로 시작
+function setFormEnabled(enabled){
+  if (!form) return;
+  const els = form.querySelectorAll("input, select, button[type='submit']");
+  els.forEach(el => el.disabled = !enabled);
+}
+setFormEnabled(false);
 
-  // 필드 수집
-  const rawUserId = (form.userId?.value || "").trim();
-  const userId = cleanUserId(rawUserId);         // ← 저장/중복검사 모두 소문자 기준
-  const username = (form.username?.value || "").trim();
-  const gender = form.gender?.value || "";
-  const password = form.password?.value || "";
-  const passwordConfirm = form.passwordConfirm?.value || "";
-  const birthYear = form.birthYear?.value || "";
-  const region = (form.region?.value || "").trim();
-  const phoneRaw = (form.phone?.value || "").trim();
-  const phoneDigits = normalizePhone(phoneRaw);
-  const phone = formatPhone(phoneRaw);
+// 카카오 프로필 저장용
+let kakaoProfile = null;
+let firebaseUser = null;
 
-  // 기본 검증
-  if (!/^[a-z0-9_]{4,20}$/.test(userId)) {
-    return showMsg("아이디는 영문/숫자/언더스코어 4~20자로 입력해주세요.");
+// ────────────────────────────────────────
+//  카카오 로그인 처리
+// ────────────────────────────────────────
+async function handleKakaoLogin() {
+  if (!window.Kakao) {
+    alert("카카오 SDK가 로드되지 않았습니다.");
+    return;
   }
-  if (!username) return showMsg("이름을 입력해주세요.");
-  if (!gender) return showMsg("성별을 선택해주세요.");
-  if (!birthYear) return showMsg("출생년도를 선택해주세요.");
-  if (!region) return showMsg("지역을 입력해주세요.");
-  if (password !== passwordConfirm) return showMsg("비밀번호가 일치하지 않습니다.");
-  if (password.length < 6) return showMsg("비밀번호는 6자 이상이어야 합니다.");
-  if (!/[A-Za-z]/.test(password)) return showMsg("비밀번호에는 최소 1개 이상의 영문자가 포함되어야 합니다.");
-  if (!(phoneDigits.length === 10 || phoneDigits.length === 11)) {
-    return showMsg("연락처는 10~11자리로 입력해주세요.");
-  }
-
-  const submitBtn = form.querySelector("button[type='submit']");
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.textContent = "중복 확인 중…";
-  }
-  showMsg("");
 
   try {
-    // ====== 1) 아이디 중복 체크 (userId 필드로 단일 where)
-    {
-      const qId = query(
-        collection(db, "users"),
-        where("userId", "==", userId),
-        limit(1)
-      );
-      const snapId = await getDocs(qId);
-      if (!snapId.empty) {
-        showMsg("이미 사용 중인 아이디입니다. 다른 아이디를 입력해주세요.");
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "가입하기"; }
-        return;
-      }
+    if (kakaoStatus) kakaoStatus.textContent = "카카오 로그인 진행 중…";
+    showMsg("");
+
+    // 1) 카카오 로그인
+    await new Promise((resolve, reject) => {
+      Kakao.Auth.login({ success: resolve, fail: reject });
+    });
+
+    // 2) 사용자 정보 조회
+    const me = await new Promise((resolve, reject) => {
+      Kakao.API.request({
+        url: "/v2/user/me",
+        success: resolve,
+        fail: reject,
+      });
+    });
+
+    const kakaoId       = me.id;
+    const kakaoNickname = me?.kakao_account?.profile?.nickname || "";
+    const kakaoEmail    = me?.kakao_account?.email || "";
+
+    kakaoProfile = { kakaoId, kakaoNickname, kakaoEmail };
+
+    // ───────────── UI 변경 ─────────────
+    if (kakaoBtn) kakaoBtn.style.display = "none";
+    if (cancelTopWrapper) cancelTopWrapper.style.display = "none";
+
+    // 기존 카카오 안내문구 숨기기
+    if (kakaoStatus) kakaoStatus.style.display = "none";
+
+    // ★ 추가 정보 안내 문구 활성화
+    if (formGuideMsg) formGuideMsg.style.display = "block";
+
+    // 폼 활성화
+    if (form) {
+      form.style.display = "block";
+      setFormEnabled(true);
     }
 
-    // ====== 2) 연락처 중복 체크 (phoneDigits 필드)
-    {
+  } catch (err) {
+    console.error("카카오 로그인 실패:", err);
+    if (kakaoStatus) {
+      kakaoStatus.style.display = "block";
+      kakaoStatus.textContent = "카카오 로그인에 실패했습니다. 다시 시도해주세요.";
+    }
+    showMsg("카카오 로그인 중 오류가 발생했습니다.");
+  }
+}
+
+if (kakaoBtn) {
+  kakaoBtn.addEventListener("click", handleKakaoLogin);
+}
+
+// 상단(카카오 영역) 취소 버튼 → 홈으로 이동
+if (cancelTopBtn) {
+  cancelTopBtn.addEventListener("click", () => {
+    location.href = "index.html";
+  });
+}
+
+// 폼 안 취소 버튼 → 홈으로 이동
+if (cancelFormBtn) {
+  cancelFormBtn.addEventListener("click", () => {
+    location.href = "index.html";
+  });
+}
+
+
+// 폼 안 취소 버튼 → 홈으로 이동
+if (cancelFormBtn) {
+  cancelFormBtn.addEventListener("click", () => {
+    location.href = "index.html";
+  });
+}
+
+// ────────────────────────────────────────
+//  추가 정보 → 가입 처리
+// ────────────────────────────────────────
+if (form) {
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    if (!kakaoProfile) return showMsg("카카오 로그인을 먼저 진행해주세요.");
+
+    // 필드 수집
+    const username = (form.username?.value || "").trim();
+    const gender   = form.gender?.value || "";
+    const birthYear = form.birthYear?.value || "";
+    const region   = (form.region?.value || "").trim();
+    const phoneRaw = (form.phone?.value || "").trim();
+    const phoneDigits = normalizePhone(phoneRaw);
+    const phone = formatPhone(phoneRaw);
+    const agreePrivacy = form.agreePrivacy?.checked === true;
+
+    // 기본 검증
+    if (!username) return showMsg("이름을 입력해주세요.");
+    if (!gender) return showMsg("성별을 선택해주세요.");
+    if (!birthYear) return showMsg("출생년도를 선택해주세요.");
+    if (!region) return showMsg("지역을 입력해주세요.");
+    if (!(phoneDigits.length === 10 || phoneDigits.length === 11))
+      return showMsg("연락처는 10~11자리로 입력해주세요.");
+    if (!agreePrivacy) return showMsg("개인정보 이용에 동의해주세요.");
+
+    const submitBtn = form.querySelector("button[type='submit']");
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "중복 확인 중…";
+    }
+    showMsg("");
+
+    try {
+      // ① 연락처 중복 체크
       const qPhone = query(
         collection(db, "users"),
         where("phoneDigits", "==", phoneDigits),
@@ -137,25 +233,22 @@ form.addEventListener("submit", async (e) => {
       );
       const snapPhone = await getDocs(qPhone);
       if (!snapPhone.empty) {
-        showMsg("이미 등록된 연락처입니다. 다른 연락처를 입력하거나 로그인해 주세요.");
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "가입하기"; }
+        showMsg("이미 등록된 연락처입니다.");
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "가입하기";
+        }
         return;
       }
-    }
 
-    // --- 성별 마감 차단 (세 모임 모두 마감 시) ---
-    {
-      const genderChosen = form.gender?.value || "";
-      if (!genderChosen) return showMsg("성별을 선택해주세요.");
-
-      // 세션 정보 우선 사용
+      // ② 성별 마감 여부 체크
+      const genderChosen = gender;
       const maleClosed   = JSON.parse(sessionStorage.getItem("__MALE_ALL_CLOSED")   || "false");
       const femaleClosed = JSON.parse(sessionStorage.getItem("__FEMALE_ALL_CLOSED") || "false");
       const closedBySession = (genderChosen === "남" ? maleClosed : femaleClosed);
 
       let reallyClosed = closedBySession;
       if (reallyClosed === false) {
-        // 세션이 false라도 정확히 한 번 서버에서 검증
         reallyClosed = await isGenderAllClosed(genderChosen);
         sessionStorage.setItem(
           genderChosen === "남" ? "__MALE_ALL_CLOSED" : "__FEMALE_ALL_CLOSED",
@@ -165,85 +258,103 @@ form.addEventListener("submit", async (e) => {
       if (reallyClosed) {
         return showMsg(`현재 ${genderChosen} 회원은(는) 모든 모임이 마감되어 가입이 제한됩니다.`);
       }
+
+      if (submitBtn) submitBtn.textContent = "가입 처리 중…";
+
+      // ③ Firebase Auth 계정 생성/로그인
+      const email = makeEmailFromKakaoId(kakaoProfile.kakaoId);
+      const password = makePasswordFromKakaoId(kakaoProfile.kakaoId);
+
+      try {
+        const credNew = await createUserWithEmailAndPassword(auth, email, password);
+        firebaseUser = credNew.user;
+        await updateProfile(firebaseUser, {
+          displayName: kakaoProfile.kakaoNickname || "Poniverse User"
+        });
+      } catch (err) {
+        if (err.code === "auth/email-already-in-use") {
+          const cred = await signInWithEmailAndPassword(auth, email, password);
+          firebaseUser = cred.user;
+        } else {
+          console.error("Auth 에러:", err);
+          throw err;
+        }
+      }
+
+      // ④ Firestore 저장
+      const userDocRef = doc(db, "users", firebaseUser.uid);
+      await setDoc(
+        userDocRef,
+        {
+          uid: firebaseUser.uid,
+          kakaoId: kakaoProfile.kakaoId,
+          kakaoNickname: kakaoProfile.kakaoNickname || "",
+          kakaoEmail: kakaoProfile.kakaoEmail || "",
+          name: username,
+          email: kakaoProfile.kakaoEmail || email,
+          gender,
+          birthYear,
+          region,
+          phone,
+          phoneDigits,
+          role: "member",
+          groups: { camp: false, board: false, sport: false, free: false },
+          attendance: { camp: false, board: false, sport: false, free: false },
+          agreedPrivacy: true,
+          privacyAgreedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      showMsg("회원가입이 완료되었습니다! 홈으로 이동합니다.", "aquamarine");
+      setTimeout(() => {
+        location.href = "home.html";
+      }, 400);
+
+    } catch (err) {
+      console.error(err);
+      showMsg("회원정보 저장 중 오류가 발생했습니다: " + (err?.message || err));
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "가입하기";
+      }
     }
+  });
+}
 
-
-    // ====== 계정 생성
-    if (submitBtn) submitBtn.textContent = "가입 처리 중…";
-
-    const fakeEmail = makeFakeEmailFromId(userId);
-    const cred = await createUserWithEmailAndPassword(auth, fakeEmail, password);
-
-    await updateProfile(cred.user, { displayName: username });
-
-    // Firestore 사용자 문서
-    await setDoc(doc(db, "users", cred.user.uid), {
-      uid: cred.user.uid,
-      userId,                // 소문자 규칙으로 저장
-      name: username,
-      email: fakeEmail,
-      gender,
-      birthYear,
-      region,
-      phone,                 // "010-1234-5678"
-      phoneDigits,           // "01012345678"
-      role: "member",
-      groups: { camp: false, board: false, sport: false, free: false }, 
-      attendance: { camp: false, board: false, sport: false, free: false },
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    showMsg("회원가입이 완료되었습니다! 홈으로 이동합니다.", "aquamarine");
-    // ✅ 가입 완료 후 home으로 이동
-    setTimeout(() => { location.href = "home.html"; }, 400);
-  } catch (err) {
-    console.error(err);
-    const code = err?.code || "";
-    if (code === "auth/email-already-in-use") {
-      showMsg("이미 사용 중인 아이디입니다. 다른 아이디를 입력해주세요.");
-    } else if (code === "auth/invalid-email") {
-      showMsg("아이디 형식이 올바르지 않습니다. 영문/숫자/언더스코어 4~20자로 입력해주세요.");
-    } else if (code === "auth/operation-not-allowed") {
-      showMsg("이메일/비밀번호 가입이 비활성화되어 있습니다. 관리자에게 문의하세요.");
-    } else if (code === "auth/weak-password") {
-      showMsg("비밀번호가 너무 약합니다. 더 강한 비밀번호를 사용하세요.");
-    } else {
-      showMsg("회원가입 중 오류가 발생했습니다: " + (err?.message || err));
-    }
-  } finally {
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "가입하기";
-    }
-  }
-});
-
-// ===== 모바일 스크롤 방해 제거 (선택: 기존 코드에 touchmove preventDefault가 있을 때만 필요)
+// ────────────────────────────────────────
+//  성별 옵션 비활성화 처리
+// ────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
-  const genderSel = form.gender; // <select name="gender"> 또는 라디오 name="gender"
+  if (!form) return;
+
+  const genderSel = form.gender;
   if (!genderSel) return;
 
-  // 우선 index에서 세션으로 넘긴 값 활용(빠름)
-  const maleClosed   = JSON.parse(sessionStorage.getItem("__MALE_ALL_CLOSED")   || "false");
+  const maleClosed = JSON.parse(sessionStorage.getItem("__MALE_ALL_CLOSED") || "false");
   const femaleClosed = JSON.parse(sessionStorage.getItem("__FEMALE_ALL_CLOSED") || "false");
 
-  // 화면 표시 및 비활성화
   const disableOpt = (val, closed) => {
-    const opt = genderSel.querySelector(`option[value="${val}"]`) || genderSel.querySelector(`[value="${val}"]`);
+    const opt = genderSel.querySelector(`option[value="${val}"]`);
     if (opt) opt.disabled = !!closed;
   };
+
   disableOpt("남", maleClosed);
   disableOpt("여", femaleClosed);
 
-  // 세션 정보가 없거나 불확실하면 Firestore로 보정
-  if (maleClosed === false && femaleClosed === false){
-    const [mAll, fAll] = await Promise.all([isGenderAllClosed("남"), isGenderAllClosed("여")]);
+  if (maleClosed === false && femaleClosed === false) {
+    const [mAll, fAll] = await Promise.all([
+      isGenderAllClosed("남"),
+      isGenderAllClosed("여")
+    ]);
+
     disableOpt("남", mAll);
     disableOpt("여", fAll);
-    sessionStorage.setItem("__MALE_ALL_CLOSED",   JSON.stringify(mAll));
+
+    sessionStorage.setItem("__MALE_ALL_CLOSED", JSON.stringify(mAll));
     sessionStorage.setItem("__FEMALE_ALL_CLOSED", JSON.stringify(fAll));
   }
 });
-
-

@@ -8,6 +8,24 @@
   <link rel="stylesheet" href="css/styles.css" />
   <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/x-icon" href="image/icon/favicon.ico" />
+
+  <style>
+    /* 로그인 페이지에서만 hero 여백 조정 */
+    .login-page .hero {
+      padding: 120px 16px 48px;
+    }
+    @media (max-width: 600px){
+      .login-page .hero {
+        padding: 96px 12px 36px;
+      }
+    }
+
+    /* 로그인 에러/안내 메시지 정렬 */
+    #loginMsg {
+      text-align: center;
+      margin-top: 6px;
+    }
+  </style>
 </head>
 
 <body class="dark-grad login-page">
@@ -22,52 +40,51 @@
         <h2>로그인</h2>
       </div>
 
-      <form id="loginForm" class="modal-body" novalidate>
-        <label>아이디
-          <input
-            type="text"
-            name="userId"
-            required
-            placeholder="영문/숫자/언더스코어 4~20자"
-            minlength="4"
-            maxlength="20"
-            pattern="^[A-Za-z0-9_]{4,20}$"
-            autocomplete="username"
-            inputmode="latin"
-          />
-        </label>
+      <div class="modal-body">
+        <!-- ✔ 안내 문구: 회원가입과 동일한 info-text 스타일 -->
+        <p id="kakaoLoginStatus" class="info-text">
+          카카오 계정으로 로그인합니다.
+        </p>
 
-        <label>비밀번호
-          <input
-            type="password"
-            name="password"
-            required
-            minlength="6"
-            placeholder="비밀번호"
-            autocomplete="current-password"
-          />
-        </label>
+        <!-- ✔ 카카오 로그인 버튼: 회원가입과 동일한 kakao-btn 스타일 -->
+        <!-- 카카오 로그인 버튼 -->
+        <button type="button" id="kakaoLoginBtn" class="btn primary kakao-btn">
+          <span class="emoji">💛</span>
+          <span>카카오로 로그인</span>
+        </button>
 
-        <div class="modal-actions">
-          <button type="submit" class="btn primary">로그인</button>
-          <button type="button" class="btn ghost" id="cancelBtn">취소</button>
+        <!-- 하단 버튼 (취소) -->
+        <div class="modal-actions" style="margin-top:6px;">
+          <button type="button" class="btn ghost" id="cancelBtn" style="width:100%;">취소</button>
         </div>
 
-        <div id="loginMsg" style="text-align:center;margin-top:6px;"></div>
-      </form>
+
+        <!-- 메시지 영역 -->
+        <div id="loginMsg"></div>
+      </div>
     </div>
   </section>
 
-  <!-- 공용 Firebase 래퍼 사용 -->
+  <!-- 카카오 JS SDK (v1) -->
+  <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
+  <script>
+    Kakao.init("0a4b627c0f6c4e64a595b6c753606e0f");
+    console.log("Kakao SDK initialized (login):", Kakao.isInitialized());
+  </script>
+
+  <!-- 카카오 로그인 + Firebase 연동 -->
   <script type="module" src="js/auth-login.js"></script>
 
   <script>
-    // 취소 버튼: 필요 경로로 수정(index.html/home.html)
+    // 취소 버튼: 인덱스로 돌아가기
     document.addEventListener('DOMContentLoaded', () => {
       const cancelBtn = document.getElementById('cancelBtn');
-      if (cancelBtn) cancelBtn.addEventListener('click', () => location.href = 'index.html');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => location.href = 'index.html');
+      }
     });
   </script>
+
   <!-- ===== Footer ===== -->
   <footer class="site-footer">
     <p>Author by <strong>YunHyunsue</strong></p>

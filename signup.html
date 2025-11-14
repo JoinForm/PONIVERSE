@@ -9,150 +9,161 @@
   <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/x-icon" href="image/icon/favicon.ico" />
 
-  <!-- 페이지 전용 여백(모바일 최적화 포함) -->
   <style>
-    .signup-page .hero { padding: 120px 16px 48px; }
-    @media (max-width: 600px){ .signup-page .hero { padding: 96px 12px 36px; } }
+    .signup-page .hero {
+      padding: 120px 16px 48px;
+    }
+    @media (max-width: 600px) {
+      .signup-page .hero {
+        padding: 96px 12px 36px;
+      }
+    }
+
+    /* 카카오 전용 버튼 */
+    .kakao-btn {
+      width: 100%;
+      background: #FEE500 !important;
+      color: #3C1E1E !important;
+      border: none !important;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 14px;
+    }
+    .kakao-btn span.emoji {
+      font-size: 1.1rem;
+    }
+    .kakao-btn:hover {
+      background: #f5d900 !important;
+    }
+
+    /* 안내 문구 공통 디자인 (카카오 안내 + 추가 정보 안내) */
+    .info-text {
+      text-align: center;
+      color: aquamarine;
+      font-size: 0.95rem;
+      margin: 0 0 10px;
+      font-weight: 600;
+    }
+
+    #signupMsg {
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    .privacy-box {
+      margin-top: 12px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #555;
+      font-size: 0.85rem;
+      background: rgba(0,0,0,0.25);
+    }
   </style>
 </head>
 
 <body class="dark-grad signup-page">
-  <!-- 헤더 -->
+
   <header class="hero">
     <h1 class="title-animate">PONIVERSE</h1>
     <p class="subtitle">회원가입</p>
   </header>
 
-  <!-- 본문 -->
-  <section style="display:flex;justify-content:center;margin:0 auto 80px; padding:0 16px;">
-    <div class="modal-dialog" style="max-width:640px;width:min(92vw,640px);">
+  <section style="display:flex; justify-content:center; margin:0 auto 80px; padding:0 16px;">
+    <div class="modal-dialog" style="max-width:640px; width:min(92vw,640px);">
+      
       <div class="modal-header">
         <h2>회원가입</h2>
       </div>
 
-      <!-- 회원가입 폼 -->
-      <form id="signupForm" class="modal-body" novalidate>
-        <!-- 아이디: 가짜 이메일의 로컬파트로 사용 (ex: user123@poniverse.kr) -->
-        <label>아이디
-          <input
-            type="text"
-            name="userId"
-            required
-            placeholder="영문/숫자/언더스코어 4~20자"
-            minlength="4"
-            maxlength="20"
-            pattern="^[A-Za-z0-9_]{4,20}$"
-            autocomplete="username"
-            inputmode="latin"
-          />
-        </label>
+      <div class="modal-body">
 
-        <!-- 비밀번호 -->
-        <label>비밀번호
-          <input
-            type="password"
-            name="password"
-            required
-            minlength="6"
-            placeholder="비밀번호 (6자 이상, 문자 포함)"
-            autocomplete="new-password"
-          />
-        </label>
+        <!-- ✔ 카카오 안내 문구 (카카오 버튼 위, info-text 공통 스타일) -->
+        <p id="kakaoStatus" class="info-text">
+          카카오 로그인을 먼저 진행해주세요.
+        </p>
 
-        <!-- 비밀번호 확인 -->
-        <label>비밀번호 확인
-          <input
-            type="password"
-            name="passwordConfirm"
-            required
-            minlength="6"
-            placeholder="비밀번호 확인"
-            autocomplete="new-password"
-          />
-        </label>
+        <!-- ✔ 카카오 로그인 버튼 -->
+        <button type="button" id="kakaoLoginBtn" class="btn primary kakao-btn">
+          <span class="emoji">💛</span>
+          <span>카카오로 시작하기</span>
+        </button>
 
-        <!-- 이름(표시용) -->
-        <label>이름
-          <input
-            type="text"
-            name="username"
-            required
-            placeholder="이름(표시될 이름)"
-            autocomplete="name"
-          />
-        </label>
-
-        <!-- 성별 -->
-        <label>성별
-          <select name="gender" required>
-            <option value="" selected disabled>선택</option>
-            <option value="남">남</option>
-            <option value="여">여</option>
-          </select>
-        </label>
-
-        <!-- 출생년도 -->
-        <label>나이(년도)
-          <select name="birthYear" required>
-            <option value="" selected disabled>선택</option>
-            <!-- js/signup-year.js 가 채워 넣음 -->
-          </select>
-        </label>
-
-        <!-- 연락처 -->
-        <label>연락처
-          <input
-            type="tel"
-            name="phone"
-            required
-            placeholder="예: 010-1234-5678"
-            inputmode="numeric"
-            autocomplete="tel"
-          />
-        </label>
-
-        <!-- 지역 -->
-        <label>지역
-          <input
-            type="text"
-            name="region"
-            required
-            placeholder="예: 포항 해도동"
-            autocomplete="address-level2"
-          />
-        </label>
-
-        <!-- 전송/취소 -->
-        <div class="modal-actions">
-          <button type="submit" class="btn primary">가입하기</button>
-          <button type="button" class="btn ghost" id="cancelBtn">취소</button>
+        <!-- ✔ 취소 버튼: 가로 전체 길이 -->
+        <div id="cancelTopWrapper" style="margin-top:12px;">
+          <button type="button" id="cancelBtnTop" class="btn ghost" style="width:100%;">취소</button>
         </div>
-      </form>
+
+        <!-- ✔ 추가 정보 입력 폼 (카카오 성공 전까지 숨김) -->
+        <form id="signupForm" novalidate style="display:none; margin-top:8px;">
+
+          <!-- ★ 추가 정보 안내 문구: 입력란 위쪽으로 이동 + 카카오 안내와 동일 디자인 -->
+          <p id="formGuideMsg" class="info-text" style="display:none; margin-bottom:12px;">
+            추가 정보를 입력한 뒤 가입하기 버튼을 눌러주세요.
+          </p>
+
+          <label>이름
+            <input type="text" name="username" required placeholder="이름(표시될 이름)" autocomplete="name" />
+          </label>
+
+          <label>성별
+            <select name="gender" required>
+              <option disabled selected value="">선택</option>
+              <option value="남">남</option>
+              <option value="여">여</option>
+            </select>
+          </label>
+
+          <label>나이(년도)
+            <select name="birthYear" required>
+              <option disabled selected value="">선택</option>
+            </select>
+          </label>
+
+          <label>연락처
+            <input type="tel" name="phone" required placeholder="예: 010-1234-5678" inputmode="numeric" />
+          </label>
+
+          <label>지역
+            <input type="text" name="region" required placeholder="예: 포항 해도동" autocomplete="address-level2" />
+          </label>
+
+          <div class="privacy-box">
+            <p>[개인정보 이용 동의]</p>
+            <p>입력하신 정보는 회원 관리 및 모임 운영을 위해 사용됩니다.</p>
+            <p>탈퇴 시 관련 법령을 제외하고 즉시 파기됩니다.</p>
+            <label><input type="checkbox" name="agreePrivacy"> 개인정보 이용에 동의합니다.</label>
+          </div>
+
+          <div class="modal-actions" style="margin-top:16px;">
+            <button type="submit" class="btn primary">가입하기</button>
+            <button type="button" id="cancelBtnForm" class="btn ghost">취소</button>
+          </div>
+        </form>
+
+        <div id="signupMsg"></div>
+
+      </div>
     </div>
   </section>
 
-  <!-- 연도 드롭다운 채우기 -->
   <script src="js/signup-year.js" defer></script>
 
-  <!-- 회원가입 처리 로직 (아이디 → 가짜 이메일 생성 포함) -->
+  <!-- 카카오 SDK -->
+  <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
+  <script>
+    Kakao.init("0a4b627c0f6c4e64a595b6c753606e0f");
+  </script>
+
+  <!-- 카카오 로그인 + 추가 정보 JS -->
   <script type="module" src="js/auth-signup.js"></script>
 
-  <!-- 취소 버튼 기본 동작 (홈 또는 인덱스로 이동) -->
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const cancelBtn = document.getElementById('cancelBtn');
-      if (cancelBtn) {
-        cancelBtn.addEventListener('click', () => {
-          // 프로젝트에 맞게 경로 조정: index.html 또는 home.html
-          location.href = 'index.html';
-        });
-      }
-    });
-  </script>
-  <!-- ===== Footer ===== -->
   <footer class="site-footer">
     <p>Author by <strong>YunHyunsue</strong></p>
     <p>Copyright ⓒ 2025 YunHyunsue. All rights reserved.</p>
   </footer>
+
 </body>
 </html>

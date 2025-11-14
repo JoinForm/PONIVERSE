@@ -1,4 +1,4 @@
-// js/members.js — 회원관리(검색/미참석자/출석/권한/강제탈퇴/리셋)
+// js/members.js — 회원관리(검색/미참석자/출석/권한/비활성화 토글/리셋)
 
 /* ============ Firebase ============ */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
@@ -6,7 +6,7 @@ import {
   getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 import {
-  getFirestore, collection, getDocs, getDoc, doc, updateDoc, deleteDoc,
+  getFirestore, collection, getDocs, getDoc, doc, updateDoc,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
 
@@ -93,7 +93,7 @@ function sortUsersByRoleThenJoined(arr) {
     if (ra !== rb) return ra - rb;            // 권한 우선
     const ja = getJoinedAtMs(a);
     const jb = getJoinedAtMs(b);
-    if (ja !== jb) return ja - jb;            // 오래된 가입 먼저 (최근 가입은 맨 뒤)
+    if (ja !== jb) return ja - jb;            // 오래된 가입 먼저
     return (a?.name || "").localeCompare(b?.name || "", "ko");
   });
   return arr;
@@ -152,28 +152,30 @@ function neverAttended(u) {
 }
 
 function applyFiltersAndRender() {
-  const term = ($("#searchInput")?.value || "").trim();
-  const onlyNever = $("#onlyNeverAttended")?.checked;
-  let list = CACHE.filter(u => matchesTerm(u, term));
-  if (onlyNever) list = list.filter(neverAttended);
+  const term        = ($("#searchInput")?.value || "").trim();
+  const onlyNever   = $("#onlyNeverAttended")?.checked;
+  const onlyDisabled = $("#onlyDisabled")?.checked;
 
-  sortUsersByRoleThenJoined(list);   // ✅ 필터 후에도 정렬 유지
+  let list = CACHE.filter(u => matchesTerm(u, term));
+  if (onlyNever)    list = list.filter(neverAttended);
+  if (onlyDisabled) list = list.filter(u => !!u.disabled);
+
+  sortUsersByRoleThenJoined(list);
   renderTable(list);
 }
-
 
 /* ============ 데이터 로드/렌더 ============ */
 async function loadMembers() {
   const body = $("#membersBody");
-  if (body) body.innerHTML = '<tr><td colspan="12">로딩 중…</td></tr>';
+  if (body) body.innerHTML = '<tr><td colspan="11">로딩 중…</td></tr>'; // 11컬럼
 
   const qSnap = await getDocs(collection(db, "users"));
   const rows = [];
   qSnap.forEach(d => rows.push({ id: d.id, ...d.data() }));
-  sortUsersByRoleThenJoined(rows);  // ✅ 역할→가입일(오래된 순) 정렬
+  sortUsersByRoleThenJoined(rows);
 
-  CACHE = rows;            // 서버 기준으로 캐시 갱신
-  applyFiltersAndRender(); // 필터 적용 후 렌더
+  CACHE = rows;
+  applyFiltersAndRender();
 }
 
 function renderTable(rows) {
@@ -185,10 +187,13 @@ function renderTable(rows) {
 
 function renderRow(u) {
   const tr = document.createElement("tr");
+  tr.dataset.uid = u.id;
 
   const gid = u.groups || {};
   const joined = { camp: !!gid.camp, board: !!gid.board, sport: !!gid.sport, free: !!gid.free };
   const att = u.attendance || {};
+  const isDisabled = !!u.disabled;
+  const isMe = u.id === auth.currentUser?.uid;
 
   const td = (cls, html) => {
     const x = document.createElement("td");
@@ -197,21 +202,23 @@ function renderRow(u) {
     return x;
   };
 
-  tr.appendChild(td("col-id",    escapeHtml(getIdPart(u) || "-")));
+  // 아이디 컬럼 없음 → 이름부터
   tr.appendChild(td("col-name",  escapeHtml(u.name || "-")));
   tr.appendChild(td("col-gy",    escapeHtml((u.gender || "-") + "/" + (u.birthYear || "-"))));
-  tr.appendChild(td("col-phone", escapeHtml(u.phone || "-"))); // 읽기 전용
+  tr.appendChild(td("col-phone", escapeHtml(u.phone || "-")));
   tr.appendChild(td("col-region", escapeHtml(u.region || "-")));
 
+  // 권한 셀 (+ 비활성화 표시)
   tr.appendChild(td("col-role", IS_MASTER
     ? (
-      '<select class="sel-role" data-uid="' + u.id + '">' +
+      '<select class="sel-role" data-uid="' + u.id + '"' + (isDisabled ? ' disabled' : '') + '>' +
         '<option value="member"'  + sel(u.role, "member")  + '>member</option>' +
         '<option value="manager"' + sel(u.role, "manager") + '>manager</option>' +
         '<option value="master"'  + sel(u.role, "master")  + '>master</option>' +
-      "</select>"
+      "</select>" +
+      (isDisabled ? '<div style="margin-top:4px;font-size:11px;color:#ff9b9b;">(비활성화)</div>' : "")
     )
-    : escapeHtml(u.role || "member")
+    : escapeHtml((u.role || "member") + (isDisabled ? " (비활성)" : ""))
   ));
 
   tr.appendChild(td("col-att", joined.camp  ? cb(u.id, "camp",  !!att.camp)  : "–"));
@@ -222,10 +229,18 @@ function renderRow(u) {
   const created = u.createdAt || u.created_at || null;
   tr.appendChild(td("col-created", created ? escapeHtml(fmtDate(created)) : "-"));
 
+  // 🔁 버튼 라벨: 현재 상태에 따라 "비활성화" / "활성화" (→ "다음 동작"을 표시)
+  const btnLabel = isDisabled ? "활성화" : "비활성화";
+  const btnDisabledAttr = isMe ? " disabled" : "";   // 자기 자신은 조작 불가
+
   tr.appendChild(td("col-ops",
     '<button class="btn danger btn-kick" data-uid="' + u.id + '"' +
-    (u.id === auth.currentUser?.uid ? " disabled" : "") + ">강제탈퇴</button>"
+    btnDisabledAttr + ">" + btnLabel + "</button>"
   ));
+
+  if (isDisabled) {
+    tr.style.opacity = 0.6;
+  }
 
   // 권한 변경
   tr.querySelectorAll(".sel-role").forEach(selEl => {
@@ -255,7 +270,6 @@ function renderRow(u) {
           ["attendance." + key]: next,
           updatedAt: serverTimestamp()
         });
-        // 캐시 갱신(필터 토글/검색 바뀌어도 화면 상태 유지)
         const idx = CACHE.findIndex(x => x.id === uid);
         if (idx >= 0) {
           const a = { ...(CACHE[idx].attendance || {}) };
@@ -271,18 +285,42 @@ function renderRow(u) {
     });
   });
 
-  // 강제탈퇴
-  tr.querySelector(".btn-kick")?.addEventListener("click", async () => {
-    const uid = tr.querySelector(".btn-kick").dataset.uid;
-    if (!confirm("정말 강제탈퇴 하시겠습니까? 해당 계정/데이터가 삭제됩니다.")) return;
+  // 🔁 비활성화/활성화 토글
+  const toggleBtn = tr.querySelector(".btn-kick");
+  toggleBtn?.addEventListener("click", async () => {
+    if (toggleBtn.disabled) return;
+
+    const uid = toggleBtn.dataset.uid;
+    const idx = CACHE.findIndex(x => x.id === uid);
+    if (idx < 0) return;
+
+    const currDisabled = !!CACHE[idx].disabled;
+    const nextDisabled = !currDisabled;
+
+    const confirmMsg = nextDisabled
+      ? "해당 계정을 '비활성화' 하시겠습니까?\n\n※ 계정은 삭제되지 않고, 로그인 및 사용이 제한됩니다."
+      : "해당 계정을 다시 '활성화' 하시겠습니까?";
+
+    if (!confirm(confirmMsg)) return;
+
     try {
-      await deleteDoc(doc(db, "users", uid));
-      CACHE = CACHE.filter(x => x.id !== uid);
-      applyFiltersAndRender();
-      notify("강제탈퇴 완료");
+      await updateDoc(doc(db, "users", uid), {
+        disabled: nextDisabled,
+        disabledAt: nextDisabled ? serverTimestamp() : null,
+        updatedAt: serverTimestamp()
+      });
+
+      // 캐시 갱신
+      CACHE[idx] = { ...CACHE[idx], disabled: nextDisabled };
+
+      // 버튼/행 상태 갱신
+      toggleBtn.textContent = nextDisabled ? "활성화" : "비활성화";
+      tr.style.opacity = nextDisabled ? 0.6 : "";
+
+      notify(nextDisabled ? "계정이 비활성화되었습니다." : "계정이 활성화되었습니다.");
     } catch (e) {
       console.error(e);
-      notify("강제탈퇴 실패");
+      notify("비활성화/활성화 처리 실패");
     }
   });
 
@@ -293,6 +331,7 @@ function renderRow(u) {
 function bindControls() {
   $("#searchInput")?.addEventListener("input", applyFiltersAndRender);
   $("#onlyNeverAttended")?.addEventListener("change", applyFiltersAndRender);
+  $("#onlyDisabled")?.addEventListener("change", applyFiltersAndRender);
 
   // 새로고침(상단/우측 둘 다)
   $("#refreshBtn")?.addEventListener("click", () => loadMembers());

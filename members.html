@@ -20,13 +20,22 @@
       margin: 26px 0 18px;  /* ← 헤더 여유 공간 */
     }
     .sr-only{ position:absolute; left:-9999px; }
-    /* 테이블은 기존 styles.css의 열폭 규칙을 그대로 사용 */
+    /* 테이블은 기존 styles.css의 열폭 규칙을 그대로 사용 (col.*) */
     table.admin{
-      width:100%; min-width:1050px;
+      width:100%; min-width:980px;
       border-collapse:separate; border-spacing:0; table-layout:fixed;
     }
     thead th{ position:static; } /* sticky 해제 */
     /* master가 아니면 연락처/권한 열 숨김은 styles.css의 .non-master 규칙이 적용됨 */
+
+    /* 작업(계정정지) 버튼 크기 줄이기 */
+    td.col-ops .btn.danger{
+      padding: 4px 10px;     /* 가로·세로 여유 줄이기 */
+      font-size: 13px;       /* 글자 크기 살짝 줄이기 */
+      min-width: 0;          /* col 폭을 넘지 않도록 */
+      white-space: nowrap;   /* 줄바꿈 없이 한 줄 유지 */
+    }
+
   </style>
 </head>
 
@@ -45,11 +54,16 @@
       <h1 class="sr-only">회원관리</h1>
 
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <input id="searchInput" type="text" placeholder="이름·아이디·지역·연락처 검색"
+        <input id="searchInput" type="text" placeholder="이름·지역·연락처 검색"
                style="background:#121720;color:#fff;border:1px solid rgba(90,120,180,.5);border-radius:10px;padding:10px 12px;min-width:260px;outline:none;">
         <label style="display:inline-flex;align-items:center;gap:6px;">
           <input type="checkbox" id="onlyNeverAttended">
           <span>미참석자만</span>
+        </label>
+        <!-- ✅ 새로 추가: 비활성화 계정만 보기 -->
+        <label style="display:inline-flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="onlyDisabled">
+          <span>비활성화 계정만</span>
         </label>
       </div>
 
@@ -62,9 +76,8 @@
 
     <div class="table-scroll">
       <table class="admin" id="membersTable" aria-label="회원 목록">
-        <!-- 열 폭은 styles.css의 col.* 규칙을 사용 -->
+        <!-- 열 폭은 styles.css의 col.* 규칙을 사용 (아이디 열 제거) -->
         <colgroup>
-          <col class="col-id">
           <col class="col-name">
           <col class="col-gy">
           <col class="col-phone">
@@ -77,15 +90,15 @@
 
         <thead>
           <tr>
-            <th class="col-id"    rowspan="2">아이디</th>
-            <th class="col-name"  rowspan="2">이름</th>
-            <th class="col-gy"    rowspan="2">성별/년도</th>
-            <th class="col-phone" rowspan="2">연락처</th>
-            <th class="col-region"rowspan="2">지역</th>
-            <th class="col-role"  rowspan="2">권한</th>
+            <!-- 아이디 열 제거 -->
+            <th class="col-name"   rowspan="2">이름</th>
+            <th class="col-gy"     rowspan="2">성별/년도</th>
+            <th class="col-phone"  rowspan="2">연락처</th>
+            <th class="col-region" rowspan="2">지역</th>
+            <th class="col-role"   rowspan="2">권한</th>
             <th colspan="4">참가(출석)</th>
             <th class="col-created" rowspan="2">생성</th>
-            <th class="col-ops"    rowspan="2">작업</th>
+            <th class="col-ops"     rowspan="2">작업</th>
           </tr>
           <tr class="group-head">
             <th>캠핑</th>
@@ -96,7 +109,8 @@
         </thead>
 
         <tbody id="membersBody">
-          <tr><td colspan="12">로딩 중…</td></tr>
+          <!-- 전체 컬럼 수: 11개 -->
+          <tr><td colspan="11">로딩 중…</td></tr>
         </tbody>
       </table>
     </div>
@@ -107,6 +121,7 @@
 
   <!-- 회원관리 스크립트 -->
   <script type="module" src="js/members.js"></script>
+
   <!-- ===== Footer ===== -->
   <footer class="site-footer">
     <p>Author by <strong>YunHyunsue</strong></p>

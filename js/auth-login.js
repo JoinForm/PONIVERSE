@@ -1,4 +1,5 @@
-// js/auth-login.js
+// js/auth-login.js — 카카오 계정으로 로그인
+
 import {
   auth,
   onAuthStateChanged,
@@ -7,72 +8,135 @@ import {
 } from "./firebase.js";
 
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
-const form = $("#loginForm");
-const msg = $("#loginMsg");
+
+const kakaoBtn = $("#kakaoLoginBtn");
+const statusEl = $("#kakaoLoginStatus");
+const msgBox   = $("#loginMsg");
 
 function showMsg(text, color = "salmon") {
-  if (!msg) return;
-  msg.style.color = color;
-  msg.textContent = text;
+  if (!msgBox) return;
+  if (!text) {
+    msgBox.textContent = "";
+    msgBox.style.display = "none";
+    return;
+  }
+  msgBox.style.display = "block";
+  msgBox.style.color = color;
+  msgBox.textContent = text;
 }
 
-function makeFakeEmailFromId(userId) {
-  // 회원가입과 동일한 규칙: 아이디@poniverse.kr
-  const clean = (userId || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-  return `${clean}@poniverse.kr`;
+// 회원가입 때와 동일한 규칙: kakao_<id>@poniverse.kr / kakao_<id>_pw
+function makeEmailFromKakaoId(kakaoId) {
+  return `kakao_${kakaoId}@poniverse.kr`;
+}
+function makePasswordFromKakaoId(kakaoId) {
+  return `kakao_${kakaoId}_pw`;
 }
 
-// 이미 로그인 상태면 홈으로
+// ────────────────────────────────────────
+//  이미 로그인 상태면 바로 홈으로
+// ────────────────────────────────────────
 await persistenceReady; // 로컬 퍼시스턴스 설정 보장
 onAuthStateChanged(auth, (user) => {
   if (user) {
-    // 이미 로그인 상태
     location.href = "home.html";
   }
 });
 
-// 제출 처리
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const userId = (form.userId?.value || "").trim();
-  const password = form.password?.value || "";
-
-  if (!/^[A-Za-z0-9_]{4,20}$/.test(userId)) {
-    return showMsg("아이디는 영문/숫자/언더스코어 4~20자로 입력해주세요.");
+// ────────────────────────────────────────
+//  카카오 로그인 처리
+// ────────────────────────────────────────
+async function handleKakaoLogin() {
+  if (!window.Kakao) {
+    alert("카카오 SDK가 로드되지 않았습니다.");
+    return;
   }
-  if (password.length < 6) {
-    return showMsg("비밀번호는 6자 이상이어야 합니다.");
-  }
-
-  const submitBtn = form.querySelector("button[type='submit']");
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.textContent = "로그인 중…";
-  }
-  showMsg("");
 
   try {
-    const fakeEmail = makeFakeEmailFromId(userId);
-    await signInWithEmailAndPassword(auth, fakeEmail, password);
-    showMsg("로그인 성공! 홈으로 이동합니다.", "aquamarine");
-    location.href = "home.html";
+    if (statusEl) statusEl.textContent = "카카오 로그인 중입니다…";
+    showMsg("");
+
+    // 1) 카카오 로그인
+    await new Promise((resolve, reject) => {
+      Kakao.Auth.login({
+        success: resolve,
+        fail: reject,
+      });
+    });
+
+    // 2) 내 정보 조회 (kakaoId 얻기)
+    const me = await new Promise((resolve, reject) => {
+      Kakao.API.request({
+        url: "/v2/user/me",
+        success: resolve,
+        fail: reject,
+      });
+    });
+
+    const kakaoId       = me.id;
+    const kakaoNickname = me?.kakao_account?.profile?.nickname || "";
+
+    const email    = makeEmailFromKakaoId(kakaoId);
+    const password = makePasswordFromKakaoId(kakaoId);
+
+    // 버튼 잠깐 비활성화
+    if (kakaoBtn) {
+      kakaoBtn.disabled = true;
+      kakaoBtn.textContent = "로그인 중…";
+    }
+
+    // 3) Firebase 로그인 시도
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+
+      // 🔥 로그인 성공 후 Firestore에서 disabled 여부 확인
+      const userDoc = await getDoc(doc(db, "users", cred.user.uid));
+      if (userDoc.exists() && userDoc.data().disabled === true) {
+        showMsg("정지된 계정입니다. 관리자에게 문의하세요.", "salmon");
+        if (statusEl) statusEl.textContent = "정지된 계정입니다.";
+
+        // 바로 로그아웃 처리
+        await auth.signOut();
+        return;
+      }
+
+      console.log("Firebase 로그인 성공:", cred.user.uid);
+
+      if (statusEl) statusEl.textContent = "";
+      showMsg("로그인에 성공했습니다! 홈으로 이동합니다.", "aquamarine");
+      setTimeout(() => {
+        location.href = "home.html";
+      }, 400);
+
+    } catch (err) {
+      console.error("Firebase 로그인 실패:", err);
+      const code = err?.code || "";
+
+      if (code === "auth/user-not-found") {
+        showMsg("아직 가입되지 않은 카카오 계정입니다. 먼저 회원가입을 진행해주세요.", "salmon");
+        if (statusEl) statusEl.textContent = "회원가입이 필요합니다.";
+      } else if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
+        // 규칙대로 만든 계정이지만 비번이 어긋난 경우 (이론상 거의 없음)
+        showMsg("로그인 정보가 일치하지 않습니다. 관리자에게 문의해주세요.", "salmon");
+      } else {
+        showMsg("로그인 중 오류가 발생했습니다: " + (err.message || err), "salmon");
+        if (statusEl) statusEl.textContent = "로그인에 실패했습니다.";
+      }
+    } finally {
+      if (kakaoBtn) {
+        kakaoBtn.disabled = false;
+        kakaoBtn.innerHTML = '<span class="emoji">💛</span><span>카카오로 로그인</span>';
+      }
+    }
+
   } catch (err) {
-    console.error(err);
-    const code = err?.code || "";
-    if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
-      showMsg("아이디 또는 비밀번호가 올바르지 않습니다.");
-    } else if (code === "auth/user-not-found") {
-      showMsg("가입 이력이 없습니다. 먼저 회원가입을 해주세요.");
-    } else if (code === "auth/too-many-requests") {
-      showMsg("잠시 후 다시 시도해주세요. (요청 과다)");
-    } else {
-      showMsg("로그인 중 오류가 발생했습니다: " + (err?.message || err));
-    }
-  } finally {
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "로그인";
-    }
+    console.error("카카오 로그인 실패:", err);
+    if (statusEl) statusEl.textContent = "카카오 로그인에 실패했습니다. 다시 시도해주세요.";
+    showMsg("카카오 로그인 중 오류가 발생했습니다.", "salmon");
   }
-});
+}
+
+// 버튼 연결
+if (kakaoBtn) {
+  kakaoBtn.addEventListener("click", handleKakaoLogin);
+}
