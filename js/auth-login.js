@@ -9,7 +9,6 @@ import {
   signOut
 } from "./firebase.js";
 
-
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 
 const kakaoBtn = $("#kakaoLoginBtn");
@@ -18,11 +17,13 @@ const msgBox   = $("#loginMsg");
 
 function showMsg(text, color = "salmon") {
   if (!msgBox) return;
+
   if (!text) {
     msgBox.textContent = "";
     msgBox.style.display = "none";
     return;
   }
+
   msgBox.style.display = "block";
   msgBox.style.color = color;
   msgBox.textContent = text;
@@ -40,6 +41,7 @@ function makePasswordFromKakaoId(kakaoId) {
 //  이미 로그인 상태면 바로 홈으로
 // ────────────────────────────────────────
 await persistenceReady; // 로컬 퍼시스턴스 설정 보장
+
 onAuthStateChanged(auth, (user) => {
   if (user) {
     location.href = "home.html";
@@ -76,8 +78,8 @@ async function handleKakaoLogin() {
       });
     });
 
-    const kakaoId       = me.id;
-    const kakaoNickname = me?.kakao_account?.profile?.nickname || "";
+    const kakaoId = me.id;
+    // const kakaoNickname = me?.kakao_account?.profile?.nickname || ""; // 필요하면 사용
 
     const email    = makeEmailFromKakaoId(kakaoId);
     const password = makePasswordFromKakaoId(kakaoId);
@@ -92,27 +94,27 @@ async function handleKakaoLogin() {
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
 
-      // 🔥 로그인 성공 후 Firestore에서 disabled 여부 확인
+      // ─ disabled 계정인지 확인 ─
       try {
         const userDoc = await getDoc(doc(db, "users", cred.user.uid));
         if (userDoc.exists() && userDoc.data().disabled === true) {
           showMsg("정지된 계정입니다. 관리자에게 문의하세요.", "salmon");
           if (statusEl) statusEl.textContent = "정지된 계정입니다.";
 
-          // 바로 로그아웃 처리 (모듈식 SDK)
+          // 바로 로그아웃 처리
           await signOut(auth);
           return;
         }
       } catch (e) {
         console.error("disabled 상태 확인 중 오류:", e);
-        // 여기서 굳이 로그인 실패로 처리하진 않고, 그냥 통과시켜도 됨
+        // 여기서 실패해도 로그인 자체를 실패로 보지는 않음
       }
-
 
       console.log("Firebase 로그인 성공:", cred.user.uid);
 
       if (statusEl) statusEl.textContent = "";
       showMsg("로그인에 성공했습니다! 홈으로 이동합니다.", "aquamarine");
+
       setTimeout(() => {
         location.href = "home.html";
       }, 400);
@@ -125,7 +127,6 @@ async function handleKakaoLogin() {
         showMsg("아직 가입되지 않은 카카오 계정입니다. 먼저 회원가입을 진행해주세요.", "salmon");
         if (statusEl) statusEl.textContent = "회원가입이 필요합니다.";
       } else if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
-        // 규칙대로 만든 계정이지만 비번이 어긋난 경우 (이론상 거의 없음)
         showMsg("로그인 정보가 일치하지 않습니다. 관리자에게 문의해주세요.", "salmon");
       } else {
         showMsg("로그인 중 오류가 발생했습니다: " + (err.message || err), "salmon");
