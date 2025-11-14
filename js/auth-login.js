@@ -1,11 +1,14 @@
 // js/auth-login.js — 카카오 계정으로 로그인
 
 import {
-  auth,
+  auth, db,
   onAuthStateChanged,
   signInWithEmailAndPassword,
-  persistenceReady
+  persistenceReady,
+  getDoc, doc,
+  signOut
 } from "./firebase.js";
+
 
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 
@@ -90,15 +93,21 @@ async function handleKakaoLogin() {
       const cred = await signInWithEmailAndPassword(auth, email, password);
 
       // 🔥 로그인 성공 후 Firestore에서 disabled 여부 확인
-      const userDoc = await getDoc(doc(db, "users", cred.user.uid));
-      if (userDoc.exists() && userDoc.data().disabled === true) {
-        showMsg("정지된 계정입니다. 관리자에게 문의하세요.", "salmon");
-        if (statusEl) statusEl.textContent = "정지된 계정입니다.";
+      try {
+        const userDoc = await getDoc(doc(db, "users", cred.user.uid));
+        if (userDoc.exists() && userDoc.data().disabled === true) {
+          showMsg("정지된 계정입니다. 관리자에게 문의하세요.", "salmon");
+          if (statusEl) statusEl.textContent = "정지된 계정입니다.";
 
-        // 바로 로그아웃 처리
-        await auth.signOut();
-        return;
+          // 바로 로그아웃 처리 (모듈식 SDK)
+          await signOut(auth);
+          return;
+        }
+      } catch (e) {
+        console.error("disabled 상태 확인 중 오류:", e);
+        // 여기서 굳이 로그인 실패로 처리하진 않고, 그냥 통과시켜도 됨
       }
+
 
       console.log("Firebase 로그인 성공:", cred.user.uid);
 
