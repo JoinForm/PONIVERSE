@@ -1,13 +1,16 @@
 // js/auth-login.js — 카카오 계정으로 로그인
 
+// firebase.js 에서 가져오는 것들
 import {
   auth, db,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   persistenceReady,
-  getDoc, doc,
-  signOut
+  getDoc, doc
 } from "./firebase.js";
+
+// signOut은 CDN에서 직접 import (firebase.js에서 안 내보내도 됨)
+import { signOut } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 
@@ -79,7 +82,7 @@ async function handleKakaoLogin() {
     });
 
     const kakaoId = me.id;
-    // const kakaoNickname = me?.kakao_account?.profile?.nickname || ""; // 필요하면 사용
+    // const kakaoNickname = me?.kakao_account?.profile?.nickname || "";
 
     const email    = makeEmailFromKakaoId(kakaoId);
     const password = makePasswordFromKakaoId(kakaoId);
