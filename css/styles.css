@@ -409,7 +409,11 @@ h1{
   max-height:85dvh;
   display:flex;
   flex-direction:column;
+
+  /* 🔽 추가 */
+  overflow:hidden;                 /* 안쪽 색깔을 라운드에 맞게 잘라줌 */
 }
+
 .modal__header{
   padding:16px 18px 10px;
   border-bottom:1px solid rgba(70,120,255,.2);
