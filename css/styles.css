@@ -504,59 +504,82 @@ h1{
    Image Modal (viewer)
    ========================= */
 #imgModal{
-  position:fixed;
-  inset:0;
-  z-index:10000;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  background:rgba(0,0,0,.75);
-  backdrop-filter:blur(4px);
-  padding:0;
-  overflow:hidden;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  /* 공통 .modal 덮어쓰기 */
+  display: none;
+  padding: 0;
+  margin: 0;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+
+  /* 가운데 정렬 */
+  align-items: center;
+  justify-content: center;
 }
-#imgModal:not([hidden]){ display:flex; }
+
+/* hidden 속성이 있으면 완전 숨김 */
+#imgModal[hidden]{
+  display: none;
+}
+
+/* hidden이 아니면 flex로 표시 */
+#imgModal:not([hidden]){
+  display: flex;
+}
+
+/* 이미지 박스: X 버튼 기준점 */
 #imgModal .modal-body{
-  position:relative;
-  display:inline-block;
-  padding:0;
-  margin:0;
-  background:transparent;
-  box-shadow:none;
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;     /* 화면 전체로 안 늘어나게 */
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
 }
+
+/* 실제 이미지 */
 #imgModal img{
-  max-width:94vw;
-  max-height:88dvh;
-  width:auto;
-  height:auto;
-  object-fit:contain;
-  border-radius:10px;
-  background:var(--bg);
-  box-shadow:0 0 20px rgba(0,0,0,.6);
+  display: block;
+  max-width: 94vw;
+  max-height: 88dvh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 0 20px rgba(0,0,0,.6);
 }
+
+/* X 버튼: 이미지 박스 오른쪽 위에 겹치기 */
 #imgModal .modal-close{
-  position:absolute;
-  top:8px;
-  right:8px;
-  width:40px;
-  height:40px;
-  border-radius:50%;
-  border:1px solid rgba(120,160,255,.35);
-  background:rgba(20,24,40,.92);
-  color:#eaf1ff;
-  font-size:20px;
-  line-height:38px;
-  text-align:center;
-  cursor:pointer;
-  box-shadow:0 4px 10px rgba(0,0,0,.5),
-             0 0 0 1px rgba(80,120,255,.2) inset;
-  transition:transform .2s, filter .2s;
-  z-index:30;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(120,160,255,.35);
+  background: rgba(20,24,40,.92);
+  color: #eaf1ff;
+  font-size: 20px;
+  line-height: 38px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow:
+    0 4px 10px rgba(0,0,0,.5),
+    0 0 0 1px rgba(80,120,255,.2) inset;
+  transition: transform .2s, filter .2s;
+  z-index: 30;
 }
 #imgModal .modal-close:hover{
-  transform:scale(1.08);
-  filter:brightness(1.15);
+  transform: scale(1.08);
+  filter: brightness(1.15);
 }
+
 
 /* =========================
    Groups (logged-in)
@@ -986,3 +1009,4 @@ textarea{
   flex:0 0 100%;
   width:100%;
 }
+
