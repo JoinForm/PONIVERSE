@@ -32,7 +32,6 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const ROLE_MEMBER_FILTER = where("role", "==", "member");
 
-
 // 로그인 상태 유지(Local)
 await setPersistence(auth, browserLocalPersistence);
 
@@ -136,7 +135,6 @@ async function refreshCounts(){
       getCountFromServer(query(usersRef, where("groups.sport", "==", true), ROLE_MEMBER_FILTER)),
     ]);
 
-
     if(reqId !== __countReqId) return;
 
     const camp  = campSnap.data().count  ?? 0;
@@ -188,7 +186,6 @@ async function isGenderFull(groupKey, gender){
   }
 }
 
-
 function setChip(el, label, n, limit = LIMIT_GENDER){
   if(!el) return;
   el.innerHTML = `<span class="lbl">${label}</span><span class="val">${n}/${limit}</span>`;
@@ -221,7 +218,6 @@ async function refreshCountsGender(){
       getCountFromServer(query(usersRef, where("groups.free",  "==", true), ROLE_MEMBER_FILTER, where("gender","==","남"))),
       getCountFromServer(query(usersRef, where("groups.free",  "==", true), ROLE_MEMBER_FILTER, where("gender","==","여"))),
     ]);
-
 
     if(reqId !== __gReqId) return;
 
@@ -377,16 +373,9 @@ function bindGroupButtons(){
           return (k === "camp" || k === "board" || k === "sport") && el.getAttribute("data-joined") === "true";
         });
         if (!hasOne) {
-          notify("캠핑/보드게임/운동 중 1개 이상 먼저 가입한 뒤 참가할 수 있어요.");
+          notify("캠핑/보드게임/운동 중 1개 이상 먼저 가입한 뒤 자유 모임에 참가할 수 있어요.");
           return; // 참가 처리 중단
         }
-      }
-
-
-      // 자유는 필참 → 탈퇴 불가
-      if(key === "free" && !willJoin){
-        notify("자유는 필참이라 탈퇴할 수 없습니다.");
-        return;
       }
 
       // camp/board/sport 최소 1개 유지
@@ -596,7 +585,6 @@ function renderPaginationControls(){
   });
 }
 
-
 loadPictures();
 
 // 모달 닫기
@@ -665,7 +653,6 @@ onAuthStateChanged(auth, async (user)=>{
     // 현재 사용자 성별 전역 저장 (참가 시 정원 체크용)
     window.__userGender = data?.gender || null;
 
-
     const joinedSet = groupsToSet(data?.groups);
     const subtitle = document.querySelector(".subtitle");
     const name = data?.name || user.displayName || (user.email?.split("@")[0] ?? "회원");
@@ -689,7 +676,10 @@ onAuthStateChanged(auth, async (user)=>{
   $("#groups")?.setAttribute("aria-hidden","false");
   $("#groupsNotice")?.setAttribute("aria-hidden","false");
   $(".page-actions")?.setAttribute("aria-hidden","false");
-  $("#groupsNotice") && ($("#groupsNotice").textContent = "자유는 필참이며, 미참가시 탈퇴 처리될 수 있습니다.");
+  if ($("#groupsNotice")) {
+    $("#groupsNotice").textContent =
+      "원활한 회원 관리를 위해 실제로 참여 중인 모임에만 ‘참가하기’ 버튼을 눌러 주세요.";
+  }
 });
 
 /* =========================
