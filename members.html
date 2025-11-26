@@ -26,16 +26,25 @@
       border-collapse:separate; border-spacing:0; table-layout:fixed;
     }
     thead th{ position:static; } /* sticky 해제 */
-    /* master가 아니면 연락처/권한 열 숨김은 styles.css의 .non-master 규칙이 적용됨 */
 
     /* 작업(계정정지) 버튼 크기 줄이기 */
     td.col-ops .btn.danger{
-      padding: 4px 10px;     /* 가로·세로 여유 줄이기 */
-      font-size: 13px;       /* 글자 크기 살짝 줄이기 */
-      min-width: 0;          /* col 폭을 넘지 않도록 */
-      white-space: nowrap;   /* 줄바꿈 없이 한 줄 유지 */
+      padding: 4px 10px;
+      font-size: 13px;
+      min-width: 0;
+      white-space: nowrap;
     }
 
+    /* 상단 필터 select */
+    #absentFilter{
+      background:#121720;
+      color:#fff;
+      border:1px solid rgba(90,120,180,.5);
+      border-radius:8px;
+      padding:6px 8px;
+      font-size:13px;
+      outline:none;
+    }
   </style>
 </head>
 
@@ -56,19 +65,41 @@
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input id="searchInput" type="text" placeholder="이름·지역·연락처 검색"
                style="background:#121720;color:#fff;border:1px solid rgba(90,120,180,.5);border-radius:10px;padding:10px 12px;min-width:260px;outline:none;">
+
+        <!-- 미참석자 필터 + 모임 선택 -->
         <label style="display:inline-flex;align-items:center;gap:6px;">
           <input type="checkbox" id="onlyNeverAttended">
           <span>미참석자만</span>
         </label>
-        <!-- ✅ 새로 추가: 비활성화 계정만 보기 -->
+        <label style="display:inline-flex;align-items:center;gap:6px;">
+          <span class="sr-only">미참석자 모임 선택</span>
+          <select id="absentFilter">
+            <option value="">모임 선택</option>
+            <option value="camp">캠핑</option>
+            <option value="board">보드게임</option>
+            <option value="sport">운동</option>
+          </select>
+        </label>
+
+        <!-- 비활성화 계정 필터 -->
         <label style="display:inline-flex;align-items:center;gap:6px;">
           <input type="checkbox" id="onlyDisabled">
           <span>비활성화 계정만</span>
         </label>
       </div>
 
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <button id="btnResetAttendance" class="btn danger" type="button" title="전 회원의 참석을 모두 미참석으로 초기화">참석률 리셋</button>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+        <!-- 메인 모임별 출석 리셋: 모두 기본 .btn -->
+        <button id="btnResetCamp"  class="btn" type="button" title="캠핑 참석을 모두 미참석으로 초기화">캠핑 출석 리셋</button>
+        <button id="btnResetBoard" class="btn" type="button" title="보드게임 참석을 모두 미참석으로 초기화">보드 출석 리셋</button>
+        <button id="btnResetSport" class="btn" type="button" title="운동 참석을 모두 미참석으로 초기화">운동 출석 리셋</button>
+
+        <!-- 전체(캠/보/운) 출석 리셋: 색만 danger -->
+        <button id="btnResetAttendance" class="btn danger" type="button"
+                title="캠핑/보드게임/운동 참석을 모두 미참석으로 초기화">
+          전체 출석 리셋
+        </button>
+
         <button id="refreshBtn2" class="btn" type="button">새로고침</button>
         <a href="home.html" class="btn ghost" id="btnHome">홈으로</a>
       </div>
@@ -76,27 +107,26 @@
 
     <div class="table-scroll">
       <table class="admin" id="membersTable" aria-label="회원 목록">
-        <!-- 열 폭은 styles.css의 col.* 규칙을 사용 (아이디 열 제거) -->
+        <!-- 열 폭: 자유 출석 칸 제거 → col-att 3개 -->
         <colgroup>
           <col class="col-name">
           <col class="col-gy">
           <col class="col-phone">
           <col class="col-region">
           <col class="col-role">
-          <col class="col-att"><col class="col-att"><col class="col-att"><col class="col-att">
+          <col class="col-att"><col class="col-att"><col class="col-att">
           <col class="col-created">
           <col class="col-ops">
         </colgroup>
 
         <thead>
           <tr>
-            <!-- 아이디 열 제거 -->
             <th class="col-name"   rowspan="2">이름</th>
             <th class="col-gy"     rowspan="2">성별/년도</th>
             <th class="col-phone"  rowspan="2">연락처</th>
             <th class="col-region" rowspan="2">지역</th>
             <th class="col-role"   rowspan="2">권한</th>
-            <th colspan="4">참가(출석)</th>
+            <th colspan="3">참가(출석)</th>
             <th class="col-created" rowspan="2">생성</th>
             <th class="col-ops"     rowspan="2">작업</th>
           </tr>
@@ -104,13 +134,12 @@
             <th>캠핑</th>
             <th>보드게임</th>
             <th>운동</th>
-            <th>자유</th>
           </tr>
         </thead>
 
         <tbody id="membersBody">
-          <!-- 전체 컬럼 수: 11개 -->
-          <tr><td colspan="11">로딩 중…</td></tr>
+          <!-- 전체 컬럼 수: 10개 -->
+          <tr><td colspan="10">로딩 중…</td></tr>
         </tbody>
       </table>
     </div>

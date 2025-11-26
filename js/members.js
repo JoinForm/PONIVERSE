@@ -1,4 +1,7 @@
 // js/members.js — 회원관리(검색/미참석자/출석/권한/비활성화 토글/리셋)
+// - 자유 모임은 출석 대상에서 제외 (테이블 칸도 제거)
+// - 메인 모임(camp/board/sport)별 미참석자 필터
+// - 메인 모임별 참석률 리셋 (캠핑/보드게임/운동)
 
 /* ============ Firebase ============ */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
@@ -75,6 +78,18 @@ function getIdPart(u) {
   return base.split("@")[0] || "";
 }
 
+/* === 출석/가입 관련 유틸 === */
+function isJoined(u, key) {
+  const g = u.groups || {};
+  const v = g[key];
+  return v === true || v === "true" || v === 1;
+}
+
+function isAttended(u, key) {
+  const a = u.attendance || {};
+  return !!a[key];
+}
+
 /* === 정렬 유틸: role 우선(master→manager→member), 같은 권한은 가입일 오래된 순 === */
 const ROLE_RANK = { master: 0, manager: 1, member: 2 };
 
@@ -116,13 +131,25 @@ onAuthStateChanged(auth, async (user) => {
     IS_MANAGER = IS_MASTER || myRole === "manager";
 
     if (!IS_MASTER) document.body.classList.add("non-master");
+
     if (!IS_MANAGER) {
       notify("접근 권한이 없습니다.");
       setTimeout(() => (location.href = "home.html"), 900);
       return;
     }
 
-    if (!IS_MASTER) $("#btnResetAttendance")?.setAttribute("disabled", "disabled");
+    // 🔓 참석률 리셋 버튼: manager / master 둘 다 사용 가능
+    if (!IS_MANAGER) {
+      $("#btnResetAttendance")?.setAttribute("disabled", "disabled");
+      $("#btnResetCamp")?.setAttribute("disabled", "disabled");
+      $("#btnResetBoard")?.setAttribute("disabled", "disabled");
+      $("#btnResetSport")?.setAttribute("disabled", "disabled");
+    } else {
+      $("#btnResetAttendance")?.removeAttribute("disabled");
+      $("#btnResetCamp")?.removeAttribute("disabled");
+      $("#btnResetBoard")?.removeAttribute("disabled");
+      $("#btnResetSport")?.removeAttribute("disabled");
+    }
 
     await loadMembers();
     bindControls();
@@ -146,19 +173,33 @@ function matchesTerm(u, term) {
   );
 }
 
-function neverAttended(u) {
-  const a = u.attendance || {};
-  return !(a.camp || a.board || a.sport || a.free);
+/**
+ * 메인 모임별 미참석자 필터
+ * - key: "camp" | "board" | "sport"
+ * - 해당 모임에 가입했으나 출석이 한 번도 안 찍힌 유저
+ */
+function isAbsentInGroup(u, key) {
+  if (!(key === "camp" || key === "board" || key === "sport")) return false;
+  if (!isJoined(u, key)) return false;
+  return !isAttended(u, key);
 }
 
 function applyFiltersAndRender() {
-  const term        = ($("#searchInput")?.value || "").trim();
-  const onlyNever   = $("#onlyNeverAttended")?.checked;
-  const onlyDisabled = $("#onlyDisabled")?.checked;
+  const term          = ($("#searchInput")?.value || "").trim();
+  const onlyDisabled  = $("#onlyDisabled")?.checked;
+  const onlyAbsent    = $("#onlyNeverAttended")?.checked; // "미참석자만"
+  const absentGroup   = ($("#absentFilter")?.value || "").trim(); // camp/board/sport
 
   let list = CACHE.filter(u => matchesTerm(u, term));
-  if (onlyNever)    list = list.filter(neverAttended);
-  if (onlyDisabled) list = list.filter(u => !!u.disabled);
+
+  if (onlyDisabled) {
+    list = list.filter(u => !!u.disabled);
+  }
+
+  // 메인 모임별 미참석자 필터
+  if (onlyAbsent && (absentGroup === "camp" || absentGroup === "board" || absentGroup === "sport")) {
+    list = list.filter(u => isAbsentInGroup(u, absentGroup));
+  }
 
   sortUsersByRoleThenJoined(list);
   renderTable(list);
@@ -167,7 +208,7 @@ function applyFiltersAndRender() {
 /* ============ 데이터 로드/렌더 ============ */
 async function loadMembers() {
   const body = $("#membersBody");
-  if (body) body.innerHTML = '<tr><td colspan="11">로딩 중…</td></tr>'; // 11컬럼
+  if (body) body.innerHTML = '<tr><td colspan="10">로딩 중…</td></tr>'; // 10컬럼
 
   const qSnap = await getDocs(collection(db, "users"));
   const rows = [];
@@ -189,8 +230,12 @@ function renderRow(u) {
   const tr = document.createElement("tr");
   tr.dataset.uid = u.id;
 
-  const gid = u.groups || {};
-  const joined = { camp: !!gid.camp, board: !!gid.board, sport: !!gid.sport, free: !!gid.free };
+  const joined = {
+    camp:  isJoined(u, "camp"),
+    board: isJoined(u, "board"),
+    sport: isJoined(u, "sport"),
+    free:  isJoined(u, "free")
+  };
   const att = u.attendance || {};
   const isDisabled = !!u.disabled;
   const isMe = u.id === auth.currentUser?.uid;
@@ -202,7 +247,6 @@ function renderRow(u) {
     return x;
   };
 
-  // 아이디 컬럼 없음 → 이름부터
   tr.appendChild(td("col-name",  escapeHtml(u.name || "-")));
   tr.appendChild(td("col-gy",    escapeHtml((u.gender || "-") + "/" + (u.birthYear || "-"))));
   tr.appendChild(td("col-phone", escapeHtml(u.phone || "-")));
@@ -221,17 +265,16 @@ function renderRow(u) {
     : escapeHtml((u.role || "member") + (isDisabled ? " (비활성)" : ""))
   ));
 
+  // 출석 체크: 메인 모임(camp/board/sport)만
   tr.appendChild(td("col-att", joined.camp  ? cb(u.id, "camp",  !!att.camp)  : "–"));
   tr.appendChild(td("col-att", joined.board ? cb(u.id, "board", !!att.board) : "–"));
   tr.appendChild(td("col-att", joined.sport ? cb(u.id, "sport", !!att.sport) : "–"));
-  tr.appendChild(td("col-att", joined.free  ? cb(u.id, "free",  !!att.free)  : "–"));
 
   const created = u.createdAt || u.created_at || null;
   tr.appendChild(td("col-created", created ? escapeHtml(fmtDate(created)) : "-"));
 
-  // 🔁 버튼 라벨: 현재 상태에 따라 "비활성화" / "활성화" (→ "다음 동작"을 표시)
   const btnLabel = isDisabled ? "활성화" : "비활성화";
-  const btnDisabledAttr = isMe ? " disabled" : "";   // 자기 자신은 조작 불가
+  const btnDisabledAttr = isMe ? " disabled" : "";
 
   tr.appendChild(td("col-ops",
     '<button class="btn danger btn-kick" data-uid="' + u.id + '"' +
@@ -259,11 +302,11 @@ function renderRow(u) {
     });
   });
 
-  // 출석 토글
+  // 출석 토글 (캠/보/운만)
   tr.querySelectorAll(".att-cb").forEach(cbEl => {
     cbEl.addEventListener("change", async () => {
       const uid  = cbEl.dataset.uid;
-      const key  = cbEl.dataset.key;
+      const key  = cbEl.dataset.key; // camp/board/sport
       const next = cbEl.checked;
       try {
         await updateDoc(doc(db, "users", uid), {
@@ -285,7 +328,7 @@ function renderRow(u) {
     });
   });
 
-  // 🔁 비활성화/활성화 토글
+  // 비활성화/활성화 토글
   const toggleBtn = tr.querySelector(".btn-kick");
   toggleBtn?.addEventListener("click", async () => {
     if (toggleBtn.disabled) return;
@@ -310,10 +353,8 @@ function renderRow(u) {
         updatedAt: serverTimestamp()
       });
 
-      // 캐시 갱신
       CACHE[idx] = { ...CACHE[idx], disabled: nextDisabled };
 
-      // 버튼/행 상태 갱신
       toggleBtn.textContent = nextDisabled ? "활성화" : "비활성화";
       tr.style.opacity = nextDisabled ? 0.6 : "";
 
@@ -327,45 +368,76 @@ function renderRow(u) {
   return tr;
 }
 
+/* ============ 참석률 리셋: 메인 모임별 ============ */
+async function resetAttendance(groupKey) {
+  if (!IS_MANAGER) {
+    notify("매니저 이상만 가능합니다.");
+    return;
+  }
+
+  // groupKey: "camp" | "board" | "sport" | "all"
+  const labels = {
+    camp: "캠핑",
+    board: "보드게임",
+    sport: "운동",
+    all: "캠핑/보드게임/운동 전체"
+  };
+
+  let targetFields;
+  let key = groupKey;
+
+  if (key === "camp" || key === "board" || key === "sport") {
+    targetFields = [key];
+  } else {
+    key = "all";
+    targetFields = ["camp", "board", "sport"];
+  }
+
+  const msg = `전 회원의 ${labels[key]} 참석 상태를 ‘미참석’으로 초기화합니다.\n\n진행하시겠습니까?`;
+  if (!confirm(msg)) return;
+
+  try {
+    const snap = await getDocs(collection(db, "users"));
+    const batch = writeBatch(db);
+
+    snap.forEach(d => {
+      const upd = { updatedAt: serverTimestamp() };
+      targetFields.forEach(f => {
+        upd[`attendance.${f}`] = false;
+      });
+      batch.update(doc(db, "users", d.id), upd);
+    });
+
+    await batch.commit();
+
+    CACHE = CACHE.map(u => {
+      const a = { ...(u.attendance || {}) };
+      targetFields.forEach(f => { a[f] = false; });
+      return { ...u, attendance: a };
+    });
+
+    applyFiltersAndRender();
+    notify("초기화 완료");
+  } catch (e) {
+    console.error(e);
+    notify("초기화 실패");
+  }
+}
+
 /* ============ 컨트롤 ============ */
 function bindControls() {
   $("#searchInput")?.addEventListener("input", applyFiltersAndRender);
+
   $("#onlyNeverAttended")?.addEventListener("change", applyFiltersAndRender);
+  $("#absentFilter")?.addEventListener("change", applyFiltersAndRender);
+
   $("#onlyDisabled")?.addEventListener("change", applyFiltersAndRender);
 
-  // 새로고침(상단/우측 둘 다)
   $("#refreshBtn")?.addEventListener("click", () => loadMembers());
   $("#refreshBtn2")?.addEventListener("click", () => loadMembers());
 
-  // 참석률 리셋(마스터만)
-  $("#btnResetAttendance")?.addEventListener("click", async () => {
-    if (!IS_MASTER) { notify("마스터만 가능합니다."); return; }
-    if (!confirm("전 회원의 참석 상태를 ‘미참석’으로 초기화합니다. 진행할까요?")) return;
-
-    try {
-      const snap = await getDocs(collection(db, "users"));
-      const batch = writeBatch(db);
-      snap.forEach(d => {
-        batch.update(doc(db, "users", d.id), {
-          "attendance.camp":  false,
-          "attendance.board": false,
-          "attendance.sport": false,
-          "attendance.free":  false,
-          updatedAt: serverTimestamp()
-        });
-      });
-      await batch.commit();
-
-      // 캐시도 초기화
-      CACHE = CACHE.map(u => ({
-        ...u,
-        attendance: { camp: false, board: false, sport: false, free: false }
-      }));
-      applyFiltersAndRender();
-      notify("초기화 완료");
-    } catch (e) {
-      console.error(e);
-      notify("초기화 실패");
-    }
-  });
+  $("#btnResetAttendance")?.addEventListener("click", () => resetAttendance("all"));
+  $("#btnResetCamp")?.addEventListener("click", () => resetAttendance("camp"));
+  $("#btnResetBoard")?.addEventListener("click", () => resetAttendance("board"));
+  $("#btnResetSport")?.addEventListener("click", () => resetAttendance("sport"));
 }
