@@ -441,3 +441,4 @@ function bindControls() {
   $("#btnResetBoard")?.addEventListener("click", () => resetAttendance("board"));
   $("#btnResetSport")?.addEventListener("click", () => resetAttendance("sport"));
 }
+
