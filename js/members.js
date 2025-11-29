@@ -260,10 +260,14 @@ function renderRow(u) {
         '<option value="manager"' + sel(u.role, "manager") + '>manager</option>' +
         '<option value="master"'  + sel(u.role, "master")  + '>master</option>' +
       "</select>" +
-      (isDisabled ? '<div style="margin-top:4px;font-size:11px;color:#ff9b9b;">(비활성화)</div>' : "")
+      (isDisabled
+        ? '<div class="disabled-label" style="margin-top:4px;font-size:11px;color:#ff9b9b;">(비활성화)</div>'
+        : ""
+      )
     )
     : escapeHtml((u.role || "member") + (isDisabled ? " (비활성)" : ""))
   ));
+
 
   // 출석 체크: 메인 모임(camp/board/sport)만
   tr.appendChild(td("col-att", joined.camp  ? cb(u.id, "camp",  !!att.camp)  : "–"));
