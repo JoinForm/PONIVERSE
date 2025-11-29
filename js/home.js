@@ -341,7 +341,7 @@ function bindGroupButtons(){
     a.style.pointerEvents = "none";
   });
 
-  groupsEl.querySelectorAll(".group-actions .group-btn, .group-actions .info-btn, .group-actions .move-btn").forEach(btn=>{
+  groupsEl.querySelectorAll(".group-actions .info-btn, .group-actions .group-btn").forEach(btn=>{
     btn.addEventListener("click", async (e)=>{
       const isLinkBtn = btn.matches("a.group-btn.move-btn");
       if(isLinkBtn){
@@ -463,6 +463,11 @@ function bindGroupButtons(){
         await window.toggleGroup?.(key, willJoin);
         refreshCounts();        // 상단 총원(있으면)
         refreshCountsGender();  // 칩들
+
+        if (willJoin && linkHref && linkHref !== "#") {
+          openLink(linkHref, { newTab: true });
+        }
+        
       }catch(err){
         console.error("toggleGroup failed:", err);
         refreshCounts();
