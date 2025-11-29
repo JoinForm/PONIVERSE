@@ -58,6 +58,48 @@ function notify(msg){
 }
 
 /* =========================
+   정지 계정 가드 (공용)
+   ========================= */
+// user가 null이면 로그인 페이지로 보내고,
+// disabled === true면 팝업 + 로그아웃 + 리다이렉트 후 null 반환.
+// 정상 계정이면 Firestore user 데이터 반환.
+async function guardActiveUser(user) {
+  if (!user) {
+    // 로그인 안 되어 있으면 index로
+    location.href = "index.html";
+    return null;
+  }
+
+  try {
+    const snap = await getDoc(doc(db, "users", user.uid));
+    const data = snap.exists() ? snap.data() : {};
+
+    if (data.disabled === true) {
+      alert("계정이 정지되었습니다. 관리자에게 문의해주세요.");
+
+      try {
+        await signOut(auth);
+        notify("정지된 계정입니다. 로그아웃되었습니다.");
+      } catch (e) {
+        console.error("signOut 실패:", e);
+      }
+
+      // 홈이나 로그인 페이지로 돌려보냄
+      location.href = "index.html";
+      return null;
+    }
+
+    return data; // 정상 계정이면 user 데이터 반환
+  } catch (e) {
+    console.error("guardActiveUser 오류:", e);
+    notify("계정 상태 확인 중 오류가 발생했습니다.");
+    // 안전하게 로그아웃 처리해도 되고, 그냥 머물러도 됨. 여기선 머무름.
+    return null;
+  }
+}
+
+
+/* =========================
    로그아웃 UI 강제 잠금
    ========================= */
 function forceLoggedOutUI(){
@@ -642,26 +684,36 @@ window.toggleGroup = async function(key, join){
 /* =========================
    Auth 상태 관찰
    ========================= */
-onAuthStateChanged(auth, async (user)=>{
-  const loggedIn = !!user;
-  if(!loggedIn){ location.href = "index.html"; return; }
+/* =========================
+   Auth 상태 관찰 (+ 정지 계정 가드)
+   ========================= */
+onAuthStateChanged(auth, async (user) => {
+  // 🔒 로그인/정지 상태 공통 체크
+  const data = await guardActiveUser(user);
+  if (!data) {
+    // guardActiveUser에서 이미 리다이렉트/로그아웃 처리했으므로 여기서 종료
+    return;
+  }
 
   document.body.dataset.auth = "in";
-  try{
+
+  try {
     await loadGroupLinks();
 
-    const snap = await getDoc(doc(db,"users", user.uid));
-    const data = snap.exists() ? snap.data() : {};
     const role = data?.role || "member";
-
     setHeaderForRole(role);
+
     // 현재 사용자 성별 전역 저장 (참가 시 정원 체크용)
     window.__userGender = data?.gender || null;
 
     const joinedSet = groupsToSet(data?.groups);
     const subtitle = document.querySelector(".subtitle");
-    const name = data?.name || user.displayName || (user.email?.split("@")[0] ?? "회원");
-    if(subtitle) subtitle.textContent = `${name}님, 포니버스에 오신 것을 환영합니다`;
+    const name =
+      data?.name ||
+      user.displayName ||
+      (user.email?.split("@")[0] ?? "회원");
+    if (subtitle)
+      subtitle.textContent = `${name}님, 포니버스에 오신 것을 환영합니다`;
 
     renderGroups(joinedSet);
 
@@ -670,7 +722,7 @@ onAuthStateChanged(auth, async (user)=>{
     refreshCounts();        // 상단 총원(있으면)
     refreshCountsGender();  // 카드 칩(자유 포함)
 
-  }catch(err){
+  } catch (err) {
     console.error("load user failed:", err);
     setHeaderForRole("member");
     renderGroups(new Set());
@@ -678,14 +730,15 @@ onAuthStateChanged(auth, async (user)=>{
     refreshCountsGender();
   }
 
-  $("#groups")?.setAttribute("aria-hidden","false");
-  $("#groupsNotice")?.setAttribute("aria-hidden","false");
-  $(".page-actions")?.setAttribute("aria-hidden","false");
+  $("#groups")?.setAttribute("aria-hidden", "false");
+  $("#groupsNotice")?.setAttribute("aria-hidden", "false");
+  $(".page-actions")?.setAttribute("aria-hidden", "false");
   if ($("#groupsNotice")) {
     $("#groupsNotice").textContent =
       "원활한 회원 관리를 위해 실제로 참여 중인 모임에만 ‘참가하기’ 버튼을 눌러 주세요.";
   }
 });
+
 
 /* =========================
    회원 탈퇴(계정 삭제)

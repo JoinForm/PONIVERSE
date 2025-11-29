@@ -45,11 +45,37 @@ function makePasswordFromKakaoId(kakaoId) {
 // ────────────────────────────────────────
 await persistenceReady; // 로컬 퍼시스턴스 설정 보장
 
-onAuthStateChanged(auth, (user) => {
-  if (user) {
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return; // 로그인 안 되어 있으면 아무것도 안 함
+
+  try {
+    const snap = await getDoc(doc(db, "users", user.uid));
+    const data = snap.exists() ? snap.data() : null;
+
+    if (data && data.disabled === true) {
+      // 🔒 정지 계정
+      alert("계정이 정지되었습니다. 관리자에게 문의해주세요.");
+
+      // 바로 로그아웃
+      await signOut(auth);
+
+      // 로그인 페이지에 메시지 찍고 싶으면:
+      showMsg("정지된 계정입니다. 로그아웃되었습니다.", "salmon");
+
+      return; // home.html로 이동하지 않음
+    }
+
+    // ✅ 정지 안 된 계정만 홈으로 보냄
     location.href = "home.html";
+
+  } catch (e) {
+    console.error("계정 정지 상태 확인 중 오류:", e);
+    // 여기서는 대충 홈으로 보낼지, 머물지 선택 가능
+    // 안전하게 가려면 그냥 머무르거나 에러 메시지 표시하면 됨
+    // showMsg("로그인 상태 확인 중 오류가 발생했습니다.", "salmon");
   }
 });
+
 
 // ────────────────────────────────────────
 //  카카오 로그인 처리
