@@ -328,7 +328,7 @@ function renderRow(u) {
     });
   });
 
-  // 비활성화/활성화 토글
+    // 비활성화/활성화 토글
   const toggleBtn = tr.querySelector(".btn-kick");
   toggleBtn?.addEventListener("click", async () => {
     if (toggleBtn.disabled) return;
@@ -353,10 +353,54 @@ function renderRow(u) {
         updatedAt: serverTimestamp()
       });
 
+      // 캐시 갱신
       CACHE[idx] = { ...CACHE[idx], disabled: nextDisabled };
 
+      // 버튼 텍스트 변경
       toggleBtn.textContent = nextDisabled ? "활성화" : "비활성화";
+
+      // 행 배경/투명도 변경
       tr.style.opacity = nextDisabled ? 0.6 : "";
+
+      // 출석 체크박스 활성/비활성
+      tr.querySelectorAll(".att-cb").forEach(cbEl => {
+        cbEl.disabled = nextDisabled;
+      });
+
+      // 권한 셀 내용/상태 변경
+      const roleTd = tr.querySelector(".col-role");
+      if (roleTd) {
+        if (IS_MASTER) {
+          const selEl = roleTd.querySelector(".sel-role");
+          if (selEl) {
+            if (nextDisabled) {
+              selEl.setAttribute("disabled", "disabled");
+            } else {
+              selEl.removeAttribute("disabled");
+            }
+          }
+
+          // (비활성화) 라벨 추가/제거
+          let label = roleTd.querySelector(".disabled-label");
+          if (nextDisabled) {
+            if (!label) {
+              label = document.createElement("div");
+              label.className = "disabled-label";
+              label.style.marginTop = "4px";
+              label.style.fontSize = "11px";
+              label.style.color = "#ff9b9b";
+              label.textContent = "(비활성화)";
+              roleTd.appendChild(label);
+            }
+          } else if (label) {
+            label.remove();
+          }
+        } else {
+          // 매니저 화면: 단순 텍스트만 바꿔 줌
+          const roleText = (CACHE[idx].role || "member") + (nextDisabled ? " (비활성)" : "");
+          roleTd.textContent = roleText;
+        }
+      }
 
       notify(nextDisabled ? "계정이 비활성화되었습니다." : "계정이 활성화되었습니다.");
     } catch (e) {
@@ -364,6 +408,21 @@ function renderRow(u) {
       notify("비활성화/활성화 처리 실패");
     }
   });
+
+
+  // 🔒 비활성화된 유저는 권한/출석 입력 막기
+  if (isDisabled) {
+    // 출석 체크박스 비활성화
+    tr.querySelectorAll(".att-cb").forEach(cbEl => {
+      cbEl.disabled = true;
+    });
+
+    // 권한 셀렉트 비활성화 (master 화면 전용)
+    const roleSelEl = tr.querySelector(".sel-role");
+    if (roleSelEl) {
+      roleSelEl.disabled = true;
+    }
+  }
 
   return tr;
 }
