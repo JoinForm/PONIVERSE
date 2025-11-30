@@ -495,26 +495,6 @@ function setupCountdownGateUI(){
   __countdownTimerId = setInterval(tick, 1000);
 }
 
-/* =========================
-   테스트용 버튼 (타이머 3초 남기기)
-   ========================= */
-document.addEventListener("DOMContentLoaded", () => {
-  setupCountdownGateUI();
-
-  const btnTest = document.getElementById("btnTestTimer");
-  if (!btnTest) return;
-
-  btnTest.addEventListener("click", () => {
-    // 현재 시각 기준 3초 후를 타깃으로
-    __countdownTarget = Date.now() + 3000;
-    setMainButtonsVisible(false);      // 다시 모집 전 상태처럼 버튼 숨김
-  });
-});
-
-
-
-document.addEventListener("DOMContentLoaded", setupCountdownGateUI);
-
 
 
 /* =========================
