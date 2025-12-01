@@ -384,8 +384,8 @@ document.addEventListener("keydown", (e) => {
    ========================= */
 
 // 2026-01-01 00:00 KST = 2025-12-31 15:00 UTC
-//const COUNTDOWN_TARGET = Date.UTC(2025, 11, 31, 15, 0, 0);
-const COUNTDOWN_TARGET = Date.now() - 1000; // 1초 전
+const COUNTDOWN_TARGET = Date.UTC(2025, 11, 31, 15, 0, 0);
+//const COUNTDOWN_TARGET = Date.now() - 1000; // Test용 1초 전
 
 
 // 현재 카운트다운이 향하고 있는 목표 시각 (기본: 진짜 오픈일)

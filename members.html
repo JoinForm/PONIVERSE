@@ -45,6 +45,65 @@
       font-size:13px;
       outline:none;
     }
+
+    /* 월 선택 input 스타일 + 달력 아이콘 흰색 */
+    input[type="month"]{
+      background:#121720;
+      color:#fff;
+      border:1px solid rgba(90,120,180,.6);
+      border-radius:999px;
+      padding:6px 12px;
+      font-size:13px;
+      outline:none;
+    }
+    /* 크롬/엣지/사파리용 달력 아이콘 색 반전 → 흰색 느낌 */
+    input[type="month"]::-webkit-calendar-picker-indicator{
+      filter: invert(1);
+    }
+    
+    .filter-chip-group{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(3,12,26,.7);
+    }
+    .filter-chip-group label{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      font-size:13px;
+    }
+
+    /* ‘모드: 출석 / 참가 관리’ 구역 구분용 */
+    .mode-chip{
+      border-left:1px solid rgba(255,255,255,.18);
+      padding-left:10px;
+      margin-left:4px;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      font-size:13px;
+    }
+
+    /* 참가/출석 칸 공통 중앙 정렬 */
+    .col-att{
+      text-align:center;
+    }
+
+    /* 참가 관리 모드에서 체크박스+텍스트를 가운데 정렬 */
+    .join-cell{
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      height:100%;
+      gap:4px;
+      font-size:12px;
+    }
+
+
   </style>
   
   <!-- Open Graph for KakaoTalk preview -->
@@ -72,29 +131,45 @@
 
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input id="searchInput" type="text" placeholder="이름·지역·연락처 검색"
-               style="background:#121720;color:#fff;border:1px solid rgba(90,120,180,.5);border-radius:10px;padding:10px 12px;min-width:260px;outline:none;">
+              style="background:#121720;color:#fff;border:1px solid rgba(90,120,180,.5);border-radius:10px;padding:10px 12px;min-width:260px;outline:none;">
 
-        <!-- 미참석자 필터 + 모임 선택 -->
-        <label style="display:inline-flex;align-items:center;gap:6px;">
-          <input type="checkbox" id="onlyNeverAttended">
-          <span>미참석자만</span>
-        </label>
-        <label style="display:inline-flex;align-items:center;gap:6px;">
-          <span class="sr-only">미참석자 모임 선택</span>
-          <select id="absentFilter">
-            <option value="">모임 선택</option>
-            <option value="camp">캠핑</option>
-            <option value="board">보드게임</option>
-            <option value="sport">운동</option>
-          </select>
-        </label>
+        <!-- ✅ 필터/모드 묶음 칩 -->
+        <div class="filter-chip-group">
+          <label>
+            <input type="checkbox" id="onlyNeverAttended">
+            <span>미참석자만</span>
+          </label>
 
-        <!-- 비활성화 계정 필터 -->
-        <label style="display:inline-flex;align-items:center;gap:6px;">
-          <input type="checkbox" id="onlyDisabled">
-          <span>비활성화 계정만</span>
-        </label>
+          <label>
+            <span class="sr-only">미참석자 모임 선택</span>
+            <select id="absentFilter">
+              <option value="">모임 선택</option>
+              <option value="camp">캠핑</option>
+              <option value="board">보드게임</option>
+              <option value="sport">운동</option>
+            </select>
+          </label>
+
+          <label>
+            <input type="checkbox" id="onlyDisabled">
+            <span>비활성화 계정만</span>
+          </label>
+
+          <!-- 모드 전환 -->
+          <div class="mode-chip">
+            <span>모드:</span>
+            <label>
+              <input type="radio" name="mode" id="modeAttendance" value="att" checked>
+              <span>출석</span>
+            </label>
+            <label>
+              <input type="radio" name="mode" id="modeJoin" value="join">
+              <span>참가 관리</span>
+            </label>
+          </div>
+        </div>
       </div>
+
 
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
         <!-- 🔹 월 선택 바 추가 (여기 시작) -->

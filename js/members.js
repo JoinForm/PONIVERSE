@@ -75,6 +75,47 @@ function cb(uid, key, checked) {
   );
 }
 
+/* ✅ 참가(가입) 전용 셀 — 참가 관리 모드에서 사용 */
+function joinCell(uid, key, joined) {
+  const checked = joined ? " checked" : "";
+  return `
+    <label class="join-cell">
+      <input type="checkbox"
+             class="join-cb"
+             data-uid="${uid}"
+             data-key="${key}"${checked}>
+      <span>참가</span>
+    </label>
+  `;
+}
+
+
+/* ✅ 참가(가입) + 출석 체크박스 묶음 셀 */
+function attCell(uid, key, joined, attended) {
+  const joinChecked = joined ? " checked" : "";
+  const attChecked  = (joined && attended) ? " checked" : "";
+  const attDisabled = joined ? "" : " disabled";
+
+  return `
+    <div class="att-cell" style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;">
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;">
+        <input type="checkbox"
+               class="join-cb"
+               data-uid="${uid}"
+               data-key="${key}"${joinChecked}>
+        <span>참가</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;">
+        <input type="checkbox"
+               class="att-cb"
+               data-uid="${uid}"
+               data-key="${key}"${attChecked}${attDisabled}>
+        <span>출석</span>
+      </label>
+    </div>
+  `;
+}
+
 function getIdPart(u) {
   const base = u.username || u.email || "";
   return base.split("@")[0] || "";
@@ -180,6 +221,7 @@ onAuthStateChanged(auth, async (user) => {
 
 /* ============ 캐시 & 필터 ============ */
 let CACHE = []; // 전체 회원 캐시(화면 변경 내용 포함)
+let MODE  = "att"; // "att" = 출석 모드(기본), "join" = 참가 관리 모드
 
 function matchesTerm(u, term) {
   if (!term) return true;
@@ -315,10 +357,20 @@ function renderRow(u) {
   ));
 
 
-  // 출석 체크: 메인 모임(camp/board/sport)만
-  tr.appendChild(td("col-att", joined.camp  ? cb(u.id, "camp",  !!att.camp)  : "–"));
-  tr.appendChild(td("col-att", joined.board ? cb(u.id, "board", !!att.board) : "–"));
-  tr.appendChild(td("col-att", joined.sport ? cb(u.id, "sport", !!att.sport) : "–"));
+  // ✅ 모드에 따라 셀 내용 변경
+  if (MODE === "join") {
+    // 참가 관리 모드: 가입 여부만 체크
+    tr.appendChild(td("col-att", joinCell(u.id, "camp",  joined.camp)));
+    tr.appendChild(td("col-att", joinCell(u.id, "board", joined.board)));
+    tr.appendChild(td("col-att", joinCell(u.id, "sport", joined.sport)));
+  } else {
+    // 출석 모드(기본): 가입한 모임만 출석 체크, 미가입은 "–"
+    tr.appendChild(td("col-att", joined.camp  ? cb(u.id, "camp",  !!att.camp)  : "–"));
+    tr.appendChild(td("col-att", joined.board ? cb(u.id, "board", !!att.board) : "–"));
+    tr.appendChild(td("col-att", joined.sport ? cb(u.id, "sport", !!att.sport) : "–"));
+  }
+
+
 
   const created = u.createdAt || u.created_at || null;
   tr.appendChild(td("col-created", created ? escapeHtml(fmtDate(created)) : "-"));
@@ -352,25 +404,73 @@ function renderRow(u) {
     });
   });
 
-  // 출석 토글 (캠/보/운만) — 월별 attendance_monthly 사용
-  tr.querySelectorAll(".att-cb").forEach(cbEl => {
-    cbEl.addEventListener("change", async () => {
-      const uid  = cbEl.dataset.uid;
-      const key  = cbEl.dataset.key; // camp/board/sport
-      const next = cbEl.checked;
-      try {
-        await saveMonthlyAttendance(uid, key, next);
-        notify("출석 상태 저장됨");
-      } catch (e) {
-        console.error(e);
-        notify("저장 실패");
-        cbEl.checked = !next;
-      }
+
+  // ✅ 모드별 이벤트 바인딩
+  if (MODE === "join") {
+    // ─ 참가 관리 모드: groups.camp/board/sport 강제 참가/탈퇴 ─
+    tr.querySelectorAll(".join-cb").forEach(joinEl => {
+      joinEl.addEventListener("change", async () => {
+        const uid  = joinEl.dataset.uid;
+        const key  = joinEl.dataset.key;   // camp / board / sport
+        const join = joinEl.checked;
+
+        try {
+          const upd = {
+            ["groups." + key]: join,
+            updatedAt: serverTimestamp()
+          };
+          // 탈퇴시키는 경우 해당 모임 출석도 같이 false로 정리
+          if (!join) {
+            upd["attendance." + key] = false;
+          }
+
+          await updateDoc(doc(db, "users", uid), upd);
+
+          // 캐시 갱신
+          const idx = CACHE.findIndex(x => x.id === uid);
+          if (idx >= 0) {
+            const g = { ...(CACHE[idx].groups || {}) };
+            g[key] = join;
+            const a = { ...(CACHE[idx].attendance || {}) };
+            if (!join) a[key] = false;
+            CACHE[idx] = { ...CACHE[idx], groups: g, attendance: a };
+          }
+
+          notify(join ? "모임에 참가 처리되었습니다." : "모임에서 탈퇴 처리되었습니다.");
+        } catch (e) {
+          console.error(e);
+          notify("모임 참가/탈퇴 저장 실패");
+          // 실패 시 UI 롤백
+          joinEl.checked = !join;
+        }
+      });
     });
-  });
+
+  } else {
+    // ─ 출석 모드: 선택한 월의 attendance_monthly 에 저장 ─
+    tr.querySelectorAll(".att-cb").forEach(cbEl => {
+      cbEl.addEventListener("change", async () => {
+        const uid  = cbEl.dataset.uid;
+        const key  = cbEl.dataset.key; // camp/board/sport
+        const next = cbEl.checked;
+
+        try {
+          // 🔹 월별 출석 컬렉션에 저장
+          await saveMonthlyAttendance(uid, key, next);
+          notify("출석 상태 저장됨");
+        } catch (e) {
+          console.error(e);
+          notify("저장 실패");
+          cbEl.checked = !next;   // 실패 시 UI 롤백
+        }
+      });
+    });
+  }
 
 
-    // 비활성화/활성화 토글
+
+
+  // 비활성화/활성화 토글
   const toggleBtn = tr.querySelector(".btn-kick");
   toggleBtn?.addEventListener("click", async () => {
     if (toggleBtn.disabled) return;
@@ -452,14 +552,15 @@ function renderRow(u) {
   });
 
 
-  // 🔒 비활성화된 유저는 권한/출석 입력 막기
+  // 🔒 비활성화된 유저는 권한/출석/참가 입력 막기
   if (isDisabled) {
-    // 출석 체크박스 비활성화
     tr.querySelectorAll(".att-cb").forEach(cbEl => {
       cbEl.disabled = true;
     });
+    tr.querySelectorAll(".join-cb").forEach(jEl => {
+      jEl.disabled = true;
+    });
 
-    // 권한 셀렉트 비활성화 (master 화면 전용)
     const roleSelEl = tr.querySelector(".sel-role");
     if (roleSelEl) {
       roleSelEl.disabled = true;
@@ -468,6 +569,7 @@ function renderRow(u) {
 
   return tr;
 }
+
 
 // 🔹 월별 출석 저장 (attendance_monthly 컬렉션)
 async function saveMonthlyAttendance(uid, groupKey, value) {
@@ -579,6 +681,22 @@ function bindControls() {
   $("#btnResetBoard")?.addEventListener("click", () => resetAttendance("board"));
   $("#btnResetSport")?.addEventListener("click", () => resetAttendance("sport"));
 
+  // 🔀 모드 전환: 출석 / 참가 관리
+  $("#modeAttendance")?.addEventListener("change", (e) => {
+    if (e.target.checked) {
+      MODE = "att";
+      applyFiltersAndRender();   // 현재 필터 기준으로 다시 렌더
+      notify("출석 모드");
+    }
+  });
+  $("#modeJoin")?.addEventListener("change", (e) => {
+    if (e.target.checked) {
+      MODE = "join";
+      applyFiltersAndRender();
+      notify("참가 관리 모드");
+    }
+  });
+  
   // 🔹 월 선택 컨트롤 바인딩
   const monthInput = $("#monthInput");
   const prevBtn    = $("#prevMonth");
