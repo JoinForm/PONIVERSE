@@ -10,8 +10,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 import {
   getFirestore, collection, getDocs, getDoc, doc, updateDoc,
-  serverTimestamp, writeBatch
+  serverTimestamp, writeBatch, query, where, setDoc
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
+
+
 
 const firebaseConfig = {
   apiKey: "AIzaSyAfs8ZN-2ANX0lYvT_WVcOMXRkNB5usuRw",
@@ -78,6 +80,22 @@ function getIdPart(u) {
   return base.split("@")[0] || "";
 }
 
+/* === 월별 출석용 헬퍼 === */
+
+// "2025-12" 이런 형식으로 만들어주는 함수
+function getMonthId(date){
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+// 현재 선택된 월 (기본: 오늘 기준)
+let CURRENT_MONTH_ID = getMonthId(new Date());
+
+// 월별 출석 캐시: { [uid]: { camp:bool, board:bool, sport:bool } }
+let ATT_MONTH = {};
+
+
 /* === 출석/가입 관련 유틸 === */
 function isJoined(u, key) {
   const g = u.groups || {};
@@ -86,9 +104,10 @@ function isJoined(u, key) {
 }
 
 function isAttended(u, key) {
-  const a = u.attendance || {};
-  return !!a[key];
+  const a = ATT_MONTH[u.id] || {};
+  return !!a[key];      // 해당 월의 출석만 본다
 }
+
 
 /* === 정렬 유틸: role 우선(master→manager→member), 같은 권한은 가입일 오래된 순 === */
 const ROLE_RANK = { master: 0, manager: 1, member: 2 };
@@ -210,14 +229,40 @@ async function loadMembers() {
   const body = $("#membersBody");
   if (body) body.innerHTML = '<tr><td colspan="10">로딩 중…</td></tr>'; // 10컬럼
 
+  const monthId = CURRENT_MONTH_ID;   // 🔹 현재 선택된 월
+
+  // 1) users 전체 읽기 (기존과 동일)
   const qSnap = await getDocs(collection(db, "users"));
   const rows = [];
   qSnap.forEach(d => rows.push({ id: d.id, ...d.data() }));
   sortUsersByRoleThenJoined(rows);
-
   CACHE = rows;
+
+  // 2) 해당 월의 출석(attendance_monthly) 읽기
+  ATT_MONTH = {};  // 초기화
+  try {
+    const attSnap = await getDocs(
+      query(
+        collection(db, "attendance_monthly"),
+        where("monthId", "==", monthId)
+      )
+    );
+    attSnap.forEach(docSnap => {
+      const d = docSnap.data();
+      ATT_MONTH[d.uid] = {
+        camp:  !!d.camp,
+        board: !!d.board,
+        sport: !!d.sport,
+      };
+    });
+  } catch (e) {
+    console.error("[attendance_monthly load failed]", e);
+  }
+
+  // 3) 필터 적용 + 렌더
   applyFiltersAndRender();
 }
+
 
 function renderTable(rows) {
   const tbody = document.createElement("tbody");
@@ -236,7 +281,8 @@ function renderRow(u) {
     sport: isJoined(u, "sport"),
     free:  isJoined(u, "free")
   };
-  const att = u.attendance || {};
+  const att = ATT_MONTH[u.id] || {};
+
   const isDisabled = !!u.disabled;
   const isMe = u.id === auth.currentUser?.uid;
 
@@ -306,23 +352,14 @@ function renderRow(u) {
     });
   });
 
-  // 출석 토글 (캠/보/운만)
+  // 출석 토글 (캠/보/운만) — 월별 attendance_monthly 사용
   tr.querySelectorAll(".att-cb").forEach(cbEl => {
     cbEl.addEventListener("change", async () => {
       const uid  = cbEl.dataset.uid;
       const key  = cbEl.dataset.key; // camp/board/sport
       const next = cbEl.checked;
       try {
-        await updateDoc(doc(db, "users", uid), {
-          ["attendance." + key]: next,
-          updatedAt: serverTimestamp()
-        });
-        const idx = CACHE.findIndex(x => x.id === uid);
-        if (idx >= 0) {
-          const a = { ...(CACHE[idx].attendance || {}) };
-          a[key] = next;
-          CACHE[idx] = { ...CACHE[idx], attendance: a };
-        }
+        await saveMonthlyAttendance(uid, key, next);
         notify("출석 상태 저장됨");
       } catch (e) {
         console.error(e);
@@ -331,6 +368,7 @@ function renderRow(u) {
       }
     });
   });
+
 
     // 비활성화/활성화 토글
   const toggleBtn = tr.querySelector(".btn-kick");
@@ -431,6 +469,30 @@ function renderRow(u) {
   return tr;
 }
 
+// 🔹 월별 출석 저장 (attendance_monthly 컬렉션)
+async function saveMonthlyAttendance(uid, groupKey, value) {
+  const monthId = CURRENT_MONTH_ID;
+  const refId   = `${uid}_${monthId}`;
+  const ref     = doc(db, "attendance_monthly", refId);
+
+  await setDoc(
+    ref,
+    {
+      uid,
+      monthId,
+      [groupKey]: value,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  // 로컬 캐시도 갱신
+  const cur = ATT_MONTH[uid] || {};
+  ATT_MONTH[uid] = { ...cur, [groupKey]: value };
+}
+
+
+
 /* ============ 참석률 리셋: 메인 모임별 ============ */
 async function resetAttendance(groupKey) {
   if (!IS_MANAGER) {
@@ -456,28 +518,40 @@ async function resetAttendance(groupKey) {
     targetFields = ["camp", "board", "sport"];
   }
 
-  const msg = `전 회원의 ${labels[key]} 참석 상태를 ‘미참석’으로 초기화합니다.\n\n진행하시겠습니까?`;
+  const msg = `${CURRENT_MONTH_ID} 월의 ${labels[key]} 참석 상태를 ‘미참석’으로 초기화합니다.\n\n진행하시겠습니까?`;
   if (!confirm(msg)) return;
 
   try {
-    const snap = await getDocs(collection(db, "users"));
+    const monthId = CURRENT_MONTH_ID;
+
+    // 1) 해당 월 출석 문서들만 가져오기
+    const snap = await getDocs(
+      query(
+        collection(db, "attendance_monthly"),
+        where("monthId", "==", monthId)
+      )
+    );
+
     const batch = writeBatch(db);
 
     snap.forEach(d => {
       const upd = { updatedAt: serverTimestamp() };
       targetFields.forEach(f => {
-        upd[`attendance.${f}`] = false;
+        upd[f] = false;    // camp/board/sport 필드를 false로
       });
-      batch.update(doc(db, "users", d.id), upd);
+      batch.update(d.ref, upd);
     });
 
     await batch.commit();
 
-    CACHE = CACHE.map(u => {
-      const a = { ...(u.attendance || {}) };
-      targetFields.forEach(f => { a[f] = false; });
-      return { ...u, attendance: a };
-    });
+    // 2) 로컬 캐시 ATT_MONTH 갱신
+    ATT_MONTH = Object.fromEntries(
+      Object.entries(ATT_MONTH).map(([uid, att]) => {
+        const nextAtt = { ...(att || {}) };
+        targetFields.forEach(f => { nextAtt[f] = false; });
+        return [uid, nextAtt];
+      })
+    );
 
     applyFiltersAndRender();
     notify("초기화 완료");
@@ -486,6 +560,7 @@ async function resetAttendance(groupKey) {
     notify("초기화 실패");
   }
 }
+
 
 /* ============ 컨트롤 ============ */
 function bindControls() {
@@ -503,5 +578,45 @@ function bindControls() {
   $("#btnResetCamp")?.addEventListener("click", () => resetAttendance("camp"));
   $("#btnResetBoard")?.addEventListener("click", () => resetAttendance("board"));
   $("#btnResetSport")?.addEventListener("click", () => resetAttendance("sport"));
+
+  // 🔹 월 선택 컨트롤 바인딩
+  const monthInput = $("#monthInput");
+  const prevBtn    = $("#prevMonth");
+  const nextBtn    = $("#nextMonth");
+
+  if (monthInput) {
+    // 페이지 진입 시 당월 기본값
+    if (!monthInput.value) {
+      monthInput.value = CURRENT_MONTH_ID;   // "YYYY-MM"
+    }
+
+    // 직접 월 선택 변경
+    monthInput.addEventListener("change", () => {
+      if (!monthInput.value) return;
+      CURRENT_MONTH_ID = monthInput.value;
+      loadMembers();
+    });
+  }
+
+  // 이전 달
+  prevBtn?.addEventListener("click", () => {
+    if (!monthInput) return;
+    const [y, m] = CURRENT_MONTH_ID.split("-").map(Number);
+    const d = new Date(y, m - 2, 1); // JS month 0-based
+    CURRENT_MONTH_ID = getMonthId(d);
+    monthInput.value = CURRENT_MONTH_ID;
+    loadMembers();
+  });
+
+  // 다음 달
+  nextBtn?.addEventListener("click", () => {
+    if (!monthInput) return;
+    const [y, m] = CURRENT_MONTH_ID.split("-").map(Number);
+    const d = new Date(y, m, 1); // +1 month
+    CURRENT_MONTH_ID = getMonthId(d);
+    monthInput.value = CURRENT_MONTH_ID;
+    loadMembers();
+  });
 }
+
 

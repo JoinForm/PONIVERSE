@@ -224,6 +224,8 @@ function probeImage(src){
 let __currentPage = 1;
 const __perPage = 10;
 let __files = [];
+let __currentImageIndex = 0;
+
 
 async function loadPictures(){
   if(!galleryEl) return;
@@ -272,16 +274,34 @@ function renderGalleryPage(page){
     <img class="hover-zoom" src="${p}" alt="pic" loading="lazy" decoding="async">
   `).join("");
 
-  galleryEl.querySelectorAll("img").forEach(img=>{
-    img.addEventListener("click", ()=>{
-      if(modalImg && imgModal){
-        modalImg.src = img.src;
-        imgModal.removeAttribute("hidden");
-        imgModal.setAttribute("aria-hidden", "false");
-      }
+  // 🔹 현재 페이지 내 img 들을 순서대로 가져옴
+  const imgs = galleryEl.querySelectorAll("img");
+
+  imgs.forEach((img, idx) => {
+    img.addEventListener("click", () => {
+      // 전역 인덱스 = 전체 파일 배열 기준 위치
+      const globalIndex = start + idx;
+      __currentImageIndex = globalIndex;
+      showImageAt(globalIndex);
     });
   });
 }
+
+function showImageAt(index) {
+  if (!__files.length || !modalImg || !imgModal) return;
+
+  // 양 끝에서 순환되게 (마지막 다음 → 첫 번째, 첫 번째 이전 → 마지막)
+  if (index < 0) index = __files.length - 1;
+  if (index >= __files.length) index = 0;
+
+  __currentImageIndex = index;
+
+  modalImg.src = __files[index];
+  imgModal.removeAttribute("hidden");
+  imgModal.setAttribute("aria-hidden", "false");
+}
+
+
 function renderPaginationControls(){
   let pagEl = document.getElementById("galleryPager");
   if(!pagEl){
@@ -320,10 +340,43 @@ if (imgModal) {
     }
   });
 }
+// 🔹 좌우 이동 버튼
+const btnPrev = document.getElementById("imgPrev");
+const btnNext = document.getElementById("imgNext");
+
+if (btnPrev) {
+  btnPrev.addEventListener("click", (e) => {
+    e.stopPropagation();                     // 배경 클릭으로 인식 안 되게
+    showImageAt(__currentImageIndex - 1);
+  });
+}
+if (btnNext) {
+  btnNext.addEventListener("click", (e) => {
+    e.stopPropagation();
+    showImageAt(__currentImageIndex + 1);
+  });
+}
+
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") hideImgModal();
+  // 항상 Esc는 동작
+  if (e.key === "Escape") {
+    hideImgModal();
+    return;
+  }
+
+  // 모달이 닫혀 있으면 좌우키 무시
+  if (!imgModal || imgModal.getAttribute("aria-hidden") === "true" || imgModal.hasAttribute("hidden")) {
+    return;
+  }
+
+  if (e.key === "ArrowLeft") {
+    showImageAt(__currentImageIndex - 1);
+  } else if (e.key === "ArrowRight") {
+    showImageAt(__currentImageIndex + 1);
+  }
 });
+
 
 
 /* =========================
@@ -331,7 +384,9 @@ document.addEventListener("keydown", (e) => {
    ========================= */
 
 // 2026-01-01 00:00 KST = 2025-12-31 15:00 UTC
-const COUNTDOWN_TARGET = Date.UTC(2025, 11, 31, 15, 0, 0);
+//const COUNTDOWN_TARGET = Date.UTC(2025, 11, 31, 15, 0, 0);
+const COUNTDOWN_TARGET = Date.now() - 1000; // 1초 전
+
 
 // 현재 카운트다운이 향하고 있는 목표 시각 (기본: 진짜 오픈일)
 let __countdownTarget = COUNTDOWN_TARGET;

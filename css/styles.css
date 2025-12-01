@@ -87,6 +87,32 @@ h1{
   letter-spacing:1px;
   color:#ccc;
 }
+
+/* 모임 이름 + 모집 상태 묶음 */
+.group-status-bar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:center;
+  gap:8px 16px;          /* 세로 8, 가로 16 간격 */
+}
+
+.group-item{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  white-space:nowrap;    /* 이름 + 배지 사이에서는 줄바꿈 금지 */
+}
+
+.group-name{
+  font-family:'Jua','Noto Sans KR',sans-serif;
+}
+
+/* 중간 점(·) 스타일 */
+.group-status-bar .dot{
+  opacity:.6;
+}
+
 .status-badge{
   display:inline-flex;
   align-items:center;
@@ -100,6 +126,7 @@ h1{
   box-shadow:0 4px 10px rgba(0,0,0,.25);
   color:#e8f0ff;
   vertical-align:middle;
+  white-space:nowrap;    /* 배지 안에서도 줄바꿈 막기 */
 }
 .status-badge.both   { border-color:rgba(200,230,255,.35); background:rgba(200,230,255,.10); }
 .status-badge.male   { border-color:rgba(102,209,255,.55); background:rgba(102,209,255,.12); color:#9ddfff; }
@@ -583,6 +610,41 @@ h1{
   transform: scale(1.08);
   filter: brightness(1.15);
 }
+/* 이미지 이동 버튼 */
+.img-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(120,160,255,.35);
+  background: rgba(20,24,40,.92);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(0,0,0,.5);
+  transition: 0.2s ease;
+}
+
+.img-nav:hover {
+  transform: translateY(-50%) scale(1.12);
+}
+
+/* 양쪽 버튼을 항상 이미지 안쪽에 배치 */
+.img-nav.prev { left: 12px; }
+.img-nav.next { right: 12px; }
+
+/* 모바일에서는 더 안쪽으로 */
+@media (max-width: 600px) {
+  .img-nav.prev { left: 10px; }
+  .img-nav.next { right: 10px; }
+}
+
 
 
 /* =========================

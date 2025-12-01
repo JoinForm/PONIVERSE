@@ -49,9 +49,15 @@
   <div id="imgModal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true">
     <div class="modal-body">
       <button class="modal-close" data-close="imgModal" aria-label="닫기" type="button">×</button>
+
+      <!-- 🔹 좌/우 이동 버튼 -->
+      <button id="imgPrev" class="img-nav prev" aria-label="이전 이미지">◀</button>
+      <button id="imgNext" class="img-nav next" aria-label="다음 이미지">▶</button>
+
       <img id="modalImg" src="" alt="확대 이미지" />
     </div>
   </div>
+
 
   <!-- 토스트 -->
   <div class="toast" id="toast" aria-live="polite"></div>

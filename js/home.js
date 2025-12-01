@@ -543,6 +543,7 @@ function probeImage(src){
 let __currentPage = 1;
 const __perPage = 10;
 let __files = [];
+let __currentImageIndex = 0;   // ✅ 현재 모달에 뜬 이미지 인덱스
 
 /* ----- 기존 loadPictures를 페이지네이션 구조로 변경 ----- */
 async function loadPictures(){
@@ -596,16 +597,15 @@ function renderGalleryPage(page){
          onerror="this.style.display='none'">
   `).join("");
 
-  galleryEl.querySelectorAll("img").forEach(img=>{
+  // ✅ 클릭한 이미지의 전체 인덱스를 기억해서 모달에 띄움
+  galleryEl.querySelectorAll("img").forEach((img, idx)=>{
+    const globalIndex = start + idx;   // __files 기준 인덱스
     img.addEventListener("click", ()=>{
-      if(modalImg && imgModal){
-        modalImg.src = img.src;
-        imgModal.removeAttribute("hidden");
-        imgModal.setAttribute("aria-hidden", "false");
-      }
+      showImageAt(globalIndex);
     });
   });
 }
+
 
 /* ----- 페이지 버튼 렌더링 ----- */
 function renderPaginationControls(){
@@ -632,17 +632,71 @@ function renderPaginationControls(){
   });
 }
 
+// ✅ 특정 인덱스 이미지 모달로 보여주기
+function showImageAt(index){
+  if (!imgModal || !modalImg || __files.length === 0) return;
+
+  // 양 끝에서 회전(마지막 다음 → 첫 번째, 첫 번째 이전 → 마지막)
+  if (index < 0) index = __files.length - 1;
+  if (index >= __files.length) index = 0;
+
+  __currentImageIndex = index;
+  modalImg.src = __files[index];
+  imgModal.removeAttribute("hidden");
+  imgModal.setAttribute("aria-hidden", "false");
+}
+
+function showNextImage(){
+  showImageAt(__currentImageIndex + 1);
+}
+
+function showPrevImage(){
+  showImageAt(__currentImageIndex - 1);
+}
+
+
 loadPictures();
 
-// 모달 닫기
-imgModal && imgModal.addEventListener("click", e=>{ if(e.target === imgModal) hideImgModal(); });
-document.addEventListener("keydown", (e)=>{ if(e.key === "Escape"){ hideImgModal(); }});
+// 모달 닫기 (배경 클릭)
+imgModal && imgModal.addEventListener("click", e=>{
+  if(e.target === imgModal) hideImgModal();
+});
+
+// 키보드 제어: ESC / ← / →
+document.addEventListener("keydown", (e)=>{
+  // 모달이 숨겨져 있으면 무시
+  if (imgModal?.getAttribute("aria-hidden") === "true") return;
+
+  if(e.key === "Escape"){
+    hideImgModal();
+  }else if(e.key === "ArrowRight"){
+    showNextImage();
+  }else if(e.key === "ArrowLeft"){
+    showPrevImage();
+  }
+});
+
+// X 버튼
 $$("[data-close]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     const id = btn.getAttribute("data-close");
     if(id === "imgModal") hideImgModal();
   });
 });
+
+// ✅ 좌/우 네비 버튼
+const prevBtn = document.getElementById("imgPrev");
+const nextBtn = document.getElementById("imgNext");
+
+prevBtn?.addEventListener("click", (e)=>{
+  e.stopPropagation();      // 배경 클릭으로 안 인식되게
+  showPrevImage();
+});
+nextBtn?.addEventListener("click", (e)=>{
+  e.stopPropagation();
+  showNextImage();
+});
+
 
 /* =========================
    헤더 (권한별)
