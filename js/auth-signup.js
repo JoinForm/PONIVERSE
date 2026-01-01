@@ -16,23 +16,27 @@ const groupKeys = ["camp","board","sport"];
 // ────────────────────────────────────────
 async function isGenderAllClosed(gender){
   try{
-    const counts = await Promise.all(
+    const snaps = await Promise.all(
       groupKeys.map(k =>
         getDocs(
           query(
             collection(db, "users"),
             where(`groups.${k}`, "==", true),
-            where("gender", "==", gender)
+            where("gender", "==", gender),
+            where("role", "==", "member") // ✅ 운영진 제외
           )
         )
       )
     );
-    return counts.every(snap => (snap.size || 0) >= LIMIT_GENDER);
+    return snaps.every(s => (s.size || 0) >= LIMIT_GENDER);
   }catch(e){
     console.error("[isGenderAllClosed] failed:", e);
     return false;
   }
 }
+
+
+
 
 // ────────────────────────────────────────
 //  도우미 함수
@@ -137,6 +141,36 @@ async function handleKakaoLogin() {
 
     kakaoProfile = { kakaoId, kakaoNickname, kakaoEmail };
 
+    // ✅ 이미 가입된 카카오 계정인지 확인 (users에 kakaoId 존재하면 차단)
+    const qKakao = query(
+      collection(db, "users"),
+      where("kakaoId", "==", kakaoId),
+      limit(1)
+    );
+    const snapKakao = await getDocs(qKakao);
+
+    if (!snapKakao.empty) {
+      // 이미 가입된 계정
+      showMsg("이미 가입된 카카오 계정입니다. 로그인 페이지로 이동합니다.", "salmon");
+
+      // (선택) 카카오 안내문구 갱신
+      if (kakaoStatus) {
+        kakaoStatus.style.display = "block";
+        kakaoStatus.textContent = "이미 가입된 카카오 계정입니다.";
+      }
+
+      // 폼은 열지 않기
+      if (form) form.style.display = "none";
+      if (formGuideMsg) formGuideMsg.style.display = "none";
+
+      setTimeout(() => {
+        location.href = "login.html"; // 또는 home.html
+      }, 700);
+
+      return; // ⭐ 여기서 handleKakaoLogin 종료
+    }
+
+
     // ───────────── UI 변경 ─────────────
     if (kakaoBtn) kakaoBtn.style.display = "none";
     if (cancelTopWrapper) cancelTopWrapper.style.display = "none";
@@ -182,12 +216,6 @@ if (cancelFormBtn) {
 }
 
 
-// 폼 안 취소 버튼 → 홈으로 이동
-if (cancelFormBtn) {
-  cancelFormBtn.addEventListener("click", () => {
-    location.href = "index.html";
-  });
-}
 
 // ────────────────────────────────────────
 //  추가 정보 → 가입 처리
@@ -241,25 +269,29 @@ if (form) {
         return;
       }
 
-      // ② 성별 마감 여부 체크
+      // ② 성별 마감 여부 체크 (캐시 여부와 무관하게 최종은 DB 기준)
       const genderChosen = gender;
-      const maleClosed   = JSON.parse(sessionStorage.getItem("__MALE_ALL_CLOSED")   || "false");
-      const femaleClosed = JSON.parse(sessionStorage.getItem("__FEMALE_ALL_CLOSED") || "false");
-      const closedBySession = (genderChosen === "남" ? maleClosed : femaleClosed);
 
-      let reallyClosed = closedBySession;
-      if (reallyClosed === false) {
-        reallyClosed = await isGenderAllClosed(genderChosen);
-        sessionStorage.setItem(
-          genderChosen === "남" ? "__MALE_ALL_CLOSED" : "__FEMALE_ALL_CLOSED",
-          JSON.stringify(reallyClosed)
-        );
-      }
+      // 항상 DB 기준으로 최종 확인
+      const reallyClosed = await isGenderAllClosed(genderChosen);
+
+      // 캐시 갱신(다음 페이지/다음 시도에 UI에서 참고 가능)
+      sessionStorage.setItem(
+        genderChosen === "남" ? "__MALE_ALL_CLOSED" : "__FEMALE_ALL_CLOSED",
+        JSON.stringify(reallyClosed)
+      );
+
       if (reallyClosed) {
-        return showMsg(`현재 ${genderChosen} 회원은(는) 모든 모임이 마감되어 가입이 제한됩니다.`);
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "가입하기";
+        }
+        showMsg(`현재 ${genderChosen} 회원은(는) 모든 모임이 마감되어 가입이 제한됩니다.`);
+        return;
       }
 
       if (submitBtn) submitBtn.textContent = "가입 처리 중…";
+
 
       // ③ Firebase Auth 계정 생성/로그인
       const email = makeEmailFromKakaoId(kakaoProfile.kakaoId);
@@ -273,8 +305,9 @@ if (form) {
         });
       } catch (err) {
         if (err.code === "auth/email-already-in-use") {
-          const cred = await signInWithEmailAndPassword(auth, email, password);
-          firebaseUser = cred.user;
+          showMsg("이미 가입된 카카오 계정입니다. 로그인 페이지로 이동합니다.");
+          setTimeout(() => location.href = "login.html", 700);
+          return;
         } else {
           console.error("Auth 에러:", err);
           throw err;
@@ -334,27 +367,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   const genderSel = form.gender;
   if (!genderSel) return;
 
-  const maleClosed = JSON.parse(sessionStorage.getItem("__MALE_ALL_CLOSED") || "false");
-  const femaleClosed = JSON.parse(sessionStorage.getItem("__FEMALE_ALL_CLOSED") || "false");
-
   const disableOpt = (val, closed) => {
     const opt = genderSel.querySelector(`option[value="${val}"]`);
     if (opt) opt.disabled = !!closed;
   };
 
+  // 1) 캐시 반영 (일단 UI 빠르게)
+  let maleClosed = JSON.parse(sessionStorage.getItem("__MALE_ALL_CLOSED") || "false");
+  let femaleClosed = JSON.parse(sessionStorage.getItem("__FEMALE_ALL_CLOSED") || "false");
   disableOpt("남", maleClosed);
   disableOpt("여", femaleClosed);
 
-  if (maleClosed === false && femaleClosed === false) {
-    const [mAll, fAll] = await Promise.all([
-      isGenderAllClosed("남"),
-      isGenderAllClosed("여")
-    ]);
+  // 2) 캐시가 true면 "혹시 풀렸나" 재검증
+  //    캐시가 false여도 최신화를 위해 재검증하고 싶으면 둘 다 재검증해도 됨
+  const [mAll, fAll] = await Promise.all([
+    isGenderAllClosed("남"),
+    isGenderAllClosed("여"),
+  ]);
 
-    disableOpt("남", mAll);
-    disableOpt("여", fAll);
+  disableOpt("남", mAll);
+  disableOpt("여", fAll);
 
-    sessionStorage.setItem("__MALE_ALL_CLOSED", JSON.stringify(mAll));
-    sessionStorage.setItem("__FEMALE_ALL_CLOSED", JSON.stringify(fAll));
-  }
+  sessionStorage.setItem("__MALE_ALL_CLOSED", JSON.stringify(mAll));
+  sessionStorage.setItem("__FEMALE_ALL_CLOSED", JSON.stringify(fAll));
 });
+
+
