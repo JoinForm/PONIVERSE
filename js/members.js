@@ -287,7 +287,7 @@ function applyFiltersAndRender() {
 /* ============ 데이터 로드/렌더 ============ */
 async function loadMembers() {
   const body = $("#membersBody");
-  if (body) body.innerHTML = '<tr><td colspan="10">로딩 중…</td></tr>'; // 10컬럼
+  if (body) body.innerHTML = '<tr><td colspan="12">로딩 중…</td></tr>'; // 12컬럼
 
   const monthId = CURRENT_MONTH_ID;   // 🔹 현재 선택된 월
 
@@ -379,16 +379,18 @@ function renderRow(u, idx = 0) {
 
   // ✅ 모드에 따라 셀 내용 변경
   if (MODE === "join") {
-    // 참가 관리 모드: 가입 여부만 체크
     tr.appendChild(td("col-att", joinCell(u.id, "camp",  joined.camp)));
     tr.appendChild(td("col-att", joinCell(u.id, "board", joined.board)));
     tr.appendChild(td("col-att", joinCell(u.id, "sport", joined.sport)));
+    tr.appendChild(td("col-att", joinCell(u.id, "free",  joined.free))); // ✅ 추가
   } else {
-    // 출석 모드(기본): 가입한 모임만 출석 체크, 미가입은 "–"
+    // 출석 모드(기본): 자유는 계속 제외
     tr.appendChild(td("col-att", joined.camp  ? cb(u.id, "camp",  !!att.camp)  : "–"));
     tr.appendChild(td("col-att", joined.board ? cb(u.id, "board", !!att.board) : "–"));
     tr.appendChild(td("col-att", joined.sport ? cb(u.id, "sport", !!att.sport) : "–"));
+    tr.appendChild(td("col-att", "–")); // ✅ 출석모드에서도 컬럼 수 맞추기(자유는 항상 –)
   }
+
 
 
 
