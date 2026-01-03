@@ -29,6 +29,7 @@ const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
+
 // 일부 환경에서 top-level await 문제가 있어 then/catch 사용
 setPersistence(auth, browserLocalPersistence).catch(() => {});
 
@@ -225,7 +226,22 @@ let MODE  = "att"; // "att" = 출석 모드(기본), "join" = 참가 관리 모�
 
 function matchesTerm(u, term) {
   if (!term) return true;
-  const t = term.toLowerCase();
+
+  const t = term.trim().toLowerCase();
+
+  // ✅ 성별 검색어 지원: "남", "여", "남자", "여자"
+  // "남"만 입력해도 남자만 나오게, "여"만 입력해도 여자만 나오게
+  const gender = String(u.gender || "").trim(); // DB에 "남" / "여" 저장돼 있다고 가정
+
+  const isGenderQuery =
+    t === "남" || t === "여" || t === "남자" || t === "여자";
+
+  if (isGenderQuery) {
+    const want = (t === "남" || t === "남자") ? "남" : "여";
+    return gender === want;
+  }
+
+  // ✅ 기존 검색(이름/지역/연락처/아이디)
   return (
     getIdPart(u).toLowerCase().includes(t) ||
     String(u.name || "").toLowerCase().includes(t) ||
@@ -233,6 +249,8 @@ function matchesTerm(u, term) {
     String(u.phone || "").toLowerCase().includes(t)
   );
 }
+
+
 
 /**
  * 메인 모임별 미참석자 필터
@@ -309,13 +327,17 @@ async function loadMembers() {
 function renderTable(rows) {
   const tbody = document.createElement("tbody");
   tbody.id = "membersBody";
-  for (const u of rows) tbody.appendChild(renderRow(u));
+  rows.forEach((u, i) => tbody.appendChild(renderRow(u, i))); // ✅ i 추가
   $("#membersBody")?.replaceWith(tbody);
 }
 
-function renderRow(u) {
+
+function renderRow(u, idx = 0) {
   const tr = document.createElement("tr");
   tr.dataset.uid = u.id;
+
+  const isDisabled = !!u.disabled;            // ✅ 이 줄이 없어서 터진거야
+  const isMe = u.id === auth.currentUser?.uid;
 
   const joined = {
     camp:  isJoined(u, "camp"),
@@ -325,9 +347,6 @@ function renderRow(u) {
   };
   const att = ATT_MONTH[u.id] || {};
 
-  const isDisabled = !!u.disabled;
-  const isMe = u.id === auth.currentUser?.uid;
-
   const td = (cls, html) => {
     const x = document.createElement("td");
     if (cls) x.className = cls;
@@ -335,6 +354,7 @@ function renderRow(u) {
     return x;
   };
 
+  tr.appendChild(td("col-idx", String(idx + 1))); // 번호
   tr.appendChild(td("col-name",  escapeHtml(u.name || "-")));
   tr.appendChild(td("col-gy",    escapeHtml((u.gender || "-") + "/" + (u.birthYear || "-"))));
   tr.appendChild(td("col-phone", escapeHtml(u.phone || "-")));

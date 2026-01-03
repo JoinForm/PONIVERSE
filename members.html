@@ -102,6 +102,43 @@
       gap:4px;
       font-size:12px;
     }
+    
+    .col-idx{ width:64px; text-align:center; }
+
+    /* =========================
+    모바일 필터 레이아웃 보정
+    ========================= */
+    @media (max-width: 600px) {
+      .filter-chip-group {
+        flex-direction: column;        /* 세로 배치 */
+        align-items: flex-start;       /* 왼쪽 정렬 */
+        gap: 8px;
+        padding: 10px 12px;
+      }
+
+      .filter-chip-group label {
+        flex-direction: row;           /* 체크박스 + 글자 가로 유지 */
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;           /* 글자 세로 쪼개짐 방지 */
+      }
+
+      .filter-chip-group select {
+        min-width: 120px;
+      }
+
+      /* 모드(출석/참가관리)도 세로 정렬 */
+      .mode-chip {
+        border-left: none;
+        padding-left: 0;
+        margin-left: 0;
+        margin-top: 6px;
+        flex-direction: row;
+        gap: 10px;
+        white-space: nowrap;
+      }
+    }
+
 
 
   </style>
@@ -201,6 +238,7 @@
       <table class="admin" id="membersTable" aria-label="회원 목록">
         <!-- 열 폭: 자유 출석 칸 제거 → col-att 3개 -->
         <colgroup>
+          <col class="col-idx">
           <col class="col-name">
           <col class="col-gy">
           <col class="col-phone">
@@ -211,8 +249,10 @@
           <col class="col-ops">
         </colgroup>
 
+
         <thead>
           <tr>
+            <th class="col-idx"    rowspan="2">번호</th>
             <th class="col-name"   rowspan="2">이름</th>
             <th class="col-gy"     rowspan="2">성별/년도</th>
             <th class="col-phone"  rowspan="2">연락처</th>
@@ -230,8 +270,8 @@
         </thead>
 
         <tbody id="membersBody">
-          <!-- 전체 컬럼 수: 10개 -->
-          <tr><td colspan="10">로딩 중…</td></tr>
+          <!-- 전체 컬럼 수: 11개 -->
+          <tr><td colspan="11">로딩 중…</td></tr>
         </tbody>
       </table>
     </div>
