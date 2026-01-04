@@ -588,10 +588,10 @@ function renderRow(u, idx = 0) {
     const uid = withdrawBtn.dataset.uid;
 
     // 본인 강퇴 방지 (테스트)
-    // if (uid === auth.currentUser?.uid) {
-    //   notify("본인은 강퇴할 수 없습니다.");
-    //   return;
-    // }
+    if (uid === auth.currentUser?.uid) {
+      notify("본인은 강퇴할 수 없습니다.");
+      return;
+    }
 
     const reason = prompt("강퇴(회원탈퇴) 사유를 입력하세요.\n(취소하면 진행되지 않습니다.)", "");
     if (reason === null) return; // 취소
