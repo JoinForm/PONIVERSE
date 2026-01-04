@@ -12,10 +12,11 @@ import {
   useDeviceLanguage
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 import {
-  getFirestore,
-  doc, getDoc, setDoc, updateDoc, serverTimestamp,
+  getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp,
   collection, getDocs, query, where, limit
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
+
+
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-storage.js";
 
 // ⚠ storageBucket은 일반적으로 PROJECT_ID.appspot.com
@@ -63,8 +64,9 @@ export {
   useDeviceLanguage,
 
   // Firestore APIs
-  doc, getDoc, setDoc, updateDoc, serverTimestamp,
+  doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp,
   collection, getDocs, query, where, limit,
+
 
   // Helpers
   persistenceReady
