@@ -10,8 +10,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 import {
   getFirestore, collection, getDocs, getDoc, doc, updateDoc,
-  serverTimestamp, writeBatch, query, where, setDoc
+  serverTimestamp, writeBatch, query, where, setDoc, deleteDoc   // ✅ deleteDoc 추가
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
+
 
 
 
@@ -401,9 +402,15 @@ function renderRow(u, idx = 0) {
   const btnDisabledAttr = isMe ? " disabled" : "";
 
   tr.appendChild(td("col-ops",
-    '<button class="btn danger btn-kick" data-uid="' + u.id + '"' +
-    btnDisabledAttr + ">" + btnLabel + "</button>"
+    // 비활성화/활성화
+    '<button class="btn danger btn-toggle" data-uid="' + u.id + '"' +
+      btnDisabledAttr + '>' + btnLabel + '</button>' +
+
+    // ✅ 강퇴
+    '<button class="btn kick btn-withdraw" data-uid="' + u.id + '">강퇴</button>'
+
   ));
+
 
   if (isDisabled) {
     tr.style.opacity = 0.6;
@@ -493,7 +500,7 @@ function renderRow(u, idx = 0) {
 
 
   // 비활성화/활성화 토글
-  const toggleBtn = tr.querySelector(".btn-kick");
+  const toggleBtn = tr.querySelector(".btn-toggle");
   toggleBtn?.addEventListener("click", async () => {
     if (toggleBtn.disabled) return;
 
@@ -573,6 +580,40 @@ function renderRow(u, idx = 0) {
     }
   });
 
+  // ✅ 강퇴(회원탈퇴) 버튼
+  const withdrawBtn = tr.querySelector(".btn-withdraw");
+  withdrawBtn?.addEventListener("click", async () => {
+    if (withdrawBtn.disabled) return;
+
+    const uid = withdrawBtn.dataset.uid;
+
+    // 본인 강퇴 방지
+    if (uid === auth.currentUser?.uid) {
+      notify("본인은 강퇴할 수 없습니다.");
+      return;
+    }
+
+    const reason = prompt("강퇴(회원탈퇴) 사유를 입력하세요.\n(취소하면 진행되지 않습니다.)", "");
+    if (reason === null) return; // 취소
+
+    const ok = confirm(
+      "정말 강퇴(회원탈퇴) 처리할까요?\n\n" +
+      "• 회원 정보(users)가 삭제됩니다.\n" +
+      "• 출석 기록(attendance_monthly)이 삭제됩니다.\n" +
+      "• 강퇴 기록(withdrawn_users)은 남습니다."
+    );
+    if (!ok) return;
+
+    try {
+      await kickAndWithdrawUser(uid, reason.trim());
+      notify("강퇴(회원탈퇴) 처리 완료");
+    } catch (e) {
+      console.error(e);
+      notify("강퇴 처리 실패(권한/규칙 확인 필요)");
+    }
+  });
+
+
 
   // 🔒 비활성화된 유저는 권한/출석/참가 입력 막기
   if (isDisabled) {
@@ -590,6 +631,51 @@ function renderRow(u, idx = 0) {
   }
 
   return tr;
+}
+
+// ✅ 강퇴(회원탈퇴) 처리: users 문서 삭제 + 출석 기록 삭제 + 기록 보관
+async function kickAndWithdrawUser(uid, reason) {
+  // 1) 유저 스냅샷(기록용)
+  const uRef = doc(db, "users", uid);
+  const uSnap = await getDoc(uRef);
+  const uData = uSnap.exists() ? uSnap.data() : {};
+
+  // 2) 강퇴 기록 보관(재가입 제한/로그 용도)
+  //    - 필요 없으면 이 블록은 빼도 됨
+  await setDoc(
+    doc(db, "withdrawn_users", uid),
+    {
+      uid,
+      type: "kicked",
+      reason: reason || "",
+      kickedAt: serverTimestamp(),
+      // 필요한 최소 정보만 남기는 걸 추천
+      name: uData.name || "",
+      phone: uData.phone || "",
+      email: uData.email || "",
+      provider: uData.provider || "",
+      kakaoUid: uData.kakaoUid || "",
+    },
+    { merge: true }
+  );
+
+  // 3) attendance_monthly에서 uid에 해당하는 문서 전부 삭제
+  const attSnap = await getDocs(
+    query(collection(db, "attendance_monthly"), where("uid", "==", uid))
+  );
+
+  if (!attSnap.empty) {
+    const batch = writeBatch(db);
+    attSnap.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+
+  // 4) users 문서 삭제(= 서비스 탈퇴 처리)
+  await deleteDoc(uRef);
+
+  // 5) 로컬 캐시에서 제거 후 렌더
+  CACHE = CACHE.filter(x => x.id !== uid);
+  applyFiltersAndRender();
 }
 
 

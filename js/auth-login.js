@@ -50,6 +50,28 @@ onAuthStateChanged(auth, async (user) => {
 
   try {
     const snap = await getDoc(doc(db, "users", user.uid));
+
+    // ✅ users 문서가 없으면: 강퇴/탈퇴 가능성 → 사유 보여주고 로그아웃
+    if (!snap.exists()) {
+      let reason = "";
+      try {
+        const wSnap = await getDoc(doc(db, "withdrawn_users", user.uid));
+        if (wSnap.exists()) {
+          reason = (wSnap.data()?.reason || "").trim();
+        }
+      } catch {}
+
+      alert(
+        "강퇴(회원탈퇴) 처리된 계정입니다.\n\n" +
+        (reason ? `사유: ${reason}\n\n` : "") +
+        "재가입 후 이용해 주세요."
+      );
+
+      await signOut(auth);
+      showMsg("강퇴(회원탈퇴) 처리된 계정입니다. 로그아웃되었습니다.", "salmon");
+      return;
+    }
+
     const data = snap.exists() ? snap.data() : null;
 
     if (data && data.disabled === true) {
@@ -126,6 +148,25 @@ async function handleKakaoLogin() {
       // ─ disabled 계정인지 확인 ─
       try {
         const userDoc = await getDoc(doc(db, "users", cred.user.uid));
+
+        // ✅ users 문서가 없으면 강퇴/탈퇴 상태일 수 있음 → 사유 안내 후 로그아웃
+        if (!userDoc.exists()) {
+          let reason = "";
+          try {
+            const wSnap = await getDoc(doc(db, "withdrawn_users", cred.user.uid));
+            if (wSnap.exists()) reason = (wSnap.data()?.reason || "").trim();
+          } catch {}
+
+          alert(
+            "강퇴(회원탈퇴) 처리된 계정입니다.\n\n" +
+            (reason ? `사유: ${reason}\n\n` : "") +
+            "재가입 후 이용해 주세요."
+          );
+
+          await signOut(auth);
+          return;
+        }
+
         if (userDoc.exists() && userDoc.data().disabled === true) {
           showMsg("정지된 계정입니다. 관리자에게 문의하세요.", "salmon");
           if (statusEl) statusEl.textContent = "정지된 계정입니다.";

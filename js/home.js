@@ -74,6 +74,31 @@ async function guardActiveUser(user) {
     const snap = await getDoc(doc(db, "users", user.uid));
     const data = snap.exists() ? snap.data() : {};
 
+    // ✅ users 문서가 없으면: 강퇴/탈퇴 가능성 → 사유 안내 후 로그아웃
+    if (!snap.exists()) {
+      let reason = "";
+      try {
+        const wSnap = await getDoc(doc(db, "withdrawn_users", user.uid));
+        if (wSnap.exists()) {
+          reason = (wSnap.data()?.reason || "").trim();
+        }
+      } catch {}
+
+      alert(
+        "강퇴(회원탈퇴) 처리된 계정입니다.\n\n" +
+        (reason ? `사유: ${reason}\n\n` : "") +
+        "재가입 후 이용해 주세요."
+      );
+
+      try {
+        await signOut(auth);
+      } catch {}
+
+      location.href = "index.html";
+      return null;
+    }
+
+
     if (data.disabled === true) {
       alert("계정이 정지되었습니다. 관리자에게 문의해주세요.");
 

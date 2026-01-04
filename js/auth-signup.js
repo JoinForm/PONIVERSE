@@ -5,7 +5,8 @@ import {
   signInWithEmailAndPassword,
   updateProfile,
   doc, setDoc, serverTimestamp,
-  collection, getDocs, query, where, limit
+  collection, getDocs, query, where, limit,
+  deleteDoc, getDoc   // ✅ 추가
 } from "./firebase.js";
 
 const LIMIT_GENDER = 10;
@@ -340,6 +341,14 @@ if (form) {
         },
         { merge: true }
       );
+
+      // ✅ 재가입 허용 처리: 강퇴/탈퇴 기록 제거(있으면)
+      try {
+        await deleteDoc(doc(db, "withdrawn_users", firebaseUser.uid));
+      } catch (e) {
+        console.warn("withdrawn_users 삭제 실패(무시 가능):", e);
+      }
+
 
       showMsg("회원가입이 완료되었습니다! 홈으로 이동합니다.", "aquamarine");
       setTimeout(() => {
