@@ -9,6 +9,9 @@ import {
   deleteDoc, getDoc   // ✅ 추가
 } from "./firebase.js";
 
+import { deleteUser, signOut } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
+
+
 const LIMIT_GENDER = 10;
 const groupKeys = ["camp","board","sport"];
 
@@ -297,6 +300,40 @@ if (form) {
       // ③ Firebase Auth 계정 생성/로그인
       const email = makeEmailFromKakaoId(kakaoProfile.kakaoId);
       const password = makePasswordFromKakaoId(kakaoProfile.kakaoId);
+
+      // ✅ (추가) 탈퇴/강퇴 후 Auth만 남아있는 "찌꺼기 계정" 정리 + 정지계정 방어
+      try {
+        const credOld = await signInWithEmailAndPassword(auth, email, password);
+
+        // 기존 Auth 계정이 존재한다는 뜻 → users 문서가 있는지 확인
+        const uRef  = doc(db, "users", credOld.user.uid);
+        const uSnap = await getDoc(uRef);
+
+        if (uSnap.exists()) {
+          const u = uSnap.data() || {};
+
+          // ✅ 정지/비활성화 계정이면 재가입 절대 불가
+          if (u.disabled === true) {
+            await signOut(auth);
+            showMsg("정지된 계정입니다. 관리자에게 문의해주세요.", "salmon");
+            return;
+          }
+
+          // ✅ users 문서가 있으면 이미 가입된 정상 계정 → 재가입 막고 로그인으로 유도
+          await signOut(auth);
+          showMsg("이미 가입된 카카오 계정입니다. 로그인 페이지로 이동합니다.", "salmon");
+          setTimeout(() => location.href = "login.html", 700);
+          return;
+        }
+
+        // ✅ users 문서가 없으면 → 탈퇴/강퇴로 users는 지웠는데 Auth만 남은 상태
+        await deleteUser(credOld.user);
+        await signOut(auth);
+
+      } catch (e) {
+        // signIn 실패 = Auth 계정 자체가 없음 → 정상적으로 신규가입 진행
+      }
+
 
       try {
         const credNew = await createUserWithEmailAndPassword(auth, email, password);
