@@ -11,7 +11,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signOut, deleteUser,
-  setPersistence, browserLocalPersistence
+  setPersistence, browserLocalPersistence, updateProfile
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, updateDoc, serverTimestamp,
@@ -556,6 +556,7 @@ function setHeaderForRole(role){
     <a id="albumBtn" class="btn primary" href="gallery.html">사진첩</a>
     ${isAdmin ? `<a id="manageBtn" class="btn" href="members.html">회원관리</a>` : ``}
     <a id="qaBtn" class="btn kakao" href="https://open.kakao.com/o/s24gqv1h" target="_blank" rel="noopener">1:1 문의</a>
+    <button id="profileBtn" class="btn ghost" type="button">정보 수정</button>
     <button id="logoutBtn" class="btn ghost" type="button">로그아웃</button>
   `;
 
@@ -564,7 +565,122 @@ function setHeaderForRole(role){
     try{ await signOut(auth); notify("로그아웃되었습니다."); }
     catch(e){ console.error(e); notify("로그아웃 실패"); }
   });
+
+  
+  bindProfileModalOnce();
+  $("#profileBtn")?.addEventListener("click", openProfileModal);
 }
+
+/* =========================
+   정보 수정(프로필) 모달
+   ========================= */
+function openModal(id){
+  const m = document.getElementById(id);
+  if(!m) return;
+  m.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+function closeModal(id){
+  const m = document.getElementById(id);
+  if(!m) return;
+  m.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function normalizePhone(v){
+  const s = String(v || "").trim();
+  const d = s.replace(/\D/g, "");
+  if(d.length === 11) return d.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3");
+  if(d.length === 10) return d.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3");
+  return s;
+}
+
+async function openProfileModal(){
+  const user = auth.currentUser;
+  if(!user){ notify("로그인이 필요합니다."); location.href="index.html"; return; }
+
+  try{
+    const snap = await getDoc(doc(db, "users", user.uid));
+    if(!snap.exists()){ notify("회원 정보를 찾을 수 없습니다."); return; }
+    const u = snap.data() || {};
+
+    // 값 채우기
+    $("#pfName").value      = u.name || user.displayName || "";
+    $("#pfBirthYear").value = u.birthYear || "";
+    $("#pfRegion").value    = u.region || "";
+    $("#pfPhone").value     = u.phone || "";
+
+    openModal("profileModal");
+  }catch(e){
+    console.error(e);
+    notify("정보를 불러오지 못했습니다.");
+  }
+}
+
+async function saveProfile(){
+  const user = auth.currentUser;
+  if(!user) return;
+
+  const name      = $("#pfName").value.trim();
+  const birthYear = String($("#pfBirthYear").value || "").trim();
+  const region    = $("#pfRegion").value.trim();
+  const phone     = normalizePhone($("#pfPhone").value);
+
+  // 최소 검증
+  if(!name){ notify("이름을 입력해 주세요."); return; }
+  if(birthYear && !/^\d{4}$/.test(birthYear)){ notify("출생년도는 4자리로 입력해 주세요."); return; }
+
+  try{
+    // users 문서 업데이트 (성별/모임참가 수정 없음)
+    await updateDoc(doc(db, "users", user.uid), {
+      name,
+      birthYear: birthYear ? Number(birthYear) : null,
+      region,
+      phone,
+      updatedAt: serverTimestamp(),
+    });
+
+    // Auth displayName도 같이 갱신(선택)
+    try{ await updateProfile(user, { displayName: name }); } catch {}
+
+    // home 화면에 즉시 반영
+    const subtitle = document.querySelector(".subtitle");
+    if(subtitle) subtitle.textContent = `${name}님, 포니버스에 오신 것을 환영합니다`;
+
+    closeModal("profileModal");
+    notify("정보가 저장되었습니다.");
+
+    // 모임/칩은 안 건드리지만, 혹시 표시 갱신 원하면 카운트만 새로고침
+    refreshCounts();
+    refreshCountsGender();
+  }catch(e){
+    console.error(e);
+    notify("저장 실패(권한/규칙 확인)");
+  }
+}
+
+
+// 모달 이벤트 바인딩 (한 번만)
+function bindProfileModalOnce(){
+  if(window.__profileModalBound) return;
+  window.__profileModalBound = true;
+
+  $("#profileCloseBtn")?.addEventListener("click", ()=> closeModal("profileModal"));
+  $("#profileCancelBtn")?.addEventListener("click", ()=> closeModal("profileModal"));
+  $("#profileSaveBtn")?.addEventListener("click", saveProfile);
+
+  const modal = $("#profileModal");
+  modal?.addEventListener("click", (e)=>{
+    if(e.target === modal) closeModal("profileModal");
+  });
+
+  document.addEventListener("keydown", (e)=>{
+    if(e.key === "Escape" && $("#profileModal")?.getAttribute("aria-hidden") === "false"){
+      closeModal("profileModal");
+    }
+  });
+}
+
 
 /* =========================
    전역: 그룹 토글(DB 반영)

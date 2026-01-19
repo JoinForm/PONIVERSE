@@ -1086,3 +1086,26 @@ textarea{
   border-radius: 12px !important;  /* 999px 같은 값 덮어쓰기 */
 }
 
+/* 프로필 모달/공용 모달 하단 버튼 영역: 좌우 여백 + 넘침 방지 */
+.modal-actions{
+  padding: 10px 16px 14px;   /* ✅ 좌/우 패딩 추가 (0px -> 16px) */
+  box-sizing: border-box;
+}
+
+/* 버튼이 컨테이너 밖으로 커지지 않게 */
+.modal-actions .btn{
+  flex: 1 1 0;
+  min-width: 0;              /* ✅ flex-item overflow 방지 핵심 */
+  max-width: 100%;
+}
+
+/* 모바일에서는 아예 세로로 떨어뜨리고 싶으면(선택) */
+@media (max-width: 480px){
+  .modal-actions{
+    flex-direction: column;
+  }
+  .modal-actions .btn{
+    width: 100%;
+  }
+}
+

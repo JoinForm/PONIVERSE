@@ -54,5 +54,43 @@
     <p>Copyright ⓒ 2025 YunHyunsue. All rights reserved.</p>
   </footer>
 
+  <!-- ✅ 정보 수정 모달 -->
+  <div id="profileModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h2>정보 수정</h2>
+        <button class="btn ghost" id="profileCloseBtn" type="button">닫기</button>
+      </div>
+
+      <div class="modal-body">
+        <label>
+          이름
+          <input id="pfName" type="text" placeholder="이름" />
+        </label>
+
+        <label>
+          출생년도
+          <input id="pfBirthYear" type="number" inputmode="numeric" placeholder="예: 1995" />
+        </label>
+
+        <label>
+          지역
+          <input id="pfRegion" type="text" placeholder="예: 포항" />
+        </label>
+
+        <label>
+          연락처
+          <input id="pfPhone" type="tel" placeholder="010-0000-0000" />
+        </label>
+
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn ghost" id="profileCancelBtn" type="button">취소</button>
+        <button class="btn primary" id="profileSaveBtn" type="button">저장</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
