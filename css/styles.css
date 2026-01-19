@@ -1076,3 +1076,13 @@ textarea{
   width:100%;
 }
 
+/* 방문자수/카운트 아래 버튼라인 간격 */
+.hero .btn-row {
+  margin-top: 32px;   /* 기본보다 크게 */
+}
+
+/* ✅ 회원관리 필터(미참석자만/모임선택/비활성화계정/모드) 바 */
+.filter-chip-group{
+  border-radius: 12px !important;  /* 999px 같은 값 덮어쓰기 */
+}
+

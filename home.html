@@ -37,27 +37,10 @@
   <!-- 로그인 후 모임 카드 컨테이너 -->
   <section id="groups" class="groups" aria-hidden="true"></section>
 
-  <!-- 갤러리 (로그인 상태에서도 동일 노출) -->
-  <section class="gallery" id="gallery" aria-label="사진 갤러리"></section>
-
   <!-- 페이지 하단 우측 버튼 (회원 탈퇴) -->
   <div class="page-actions" aria-hidden="true">
     <button id="withdrawBtn" class="withdraw-btn" type="button">회원 탈퇴</button>
   </div>
-
-  <!-- 이미지 확대 모달 -->
-  <div id="imgModal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true">
-    <div class="modal-body">
-      <button class="modal-close" data-close="imgModal" aria-label="닫기" type="button">×</button>
-
-      <!-- 🔹 좌/우 이동 버튼 -->
-      <button id="imgPrev" class="img-nav prev" aria-label="이전 이미지">◀</button>
-      <button id="imgNext" class="img-nav next" aria-label="다음 이미지">▶</button>
-
-      <img id="modalImg" src="" alt="확대 이미지" />
-    </div>
-  </div>
-
 
   <!-- 토스트 -->
   <div class="toast" id="toast" aria-live="polite"></div>

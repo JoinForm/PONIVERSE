@@ -60,27 +60,12 @@
     <!-- 링크형 버튼 (로그아웃 상태 전용) -->
     <div class="btn-row">
       <a id="btnSignUp" class="btn primary" href="signup.html">회원가입</a>
+      <a id="btnAlbum"  class="btn primary" href="gallery.html">사진첩</a>
       <a id="btnLogin"  class="btn ghost"   href="login.html">로그인</a>
     </div>
 
+
   </header>
-
-  <!-- 갤러리 (로그인과 무관, 공개) -->
-  <section class="gallery" id="gallery" aria-label="사진 갤러리"></section>
-
-  <!-- 이미지 확대 모달 -->
-  <div id="imgModal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true">
-    <div class="modal-body">
-      <button class="modal-close" data-close="imgModal" aria-label="닫기" type="button">×</button>
-
-      <!-- 좌우 이동 버튼 추가 -->
-      <button id="imgPrev" class="img-nav prev" aria-label="이전 이미지">◀</button>
-      <button id="imgNext" class="img-nav next" aria-label="다음 이미지">▶</button>
-
-      <img id="modalImg" src="" alt="확대 이미지" />
-    </div>
-  </div>
-
 
   <!-- 가입 조건/유의사항 모달 -->
   <div id="signupGate" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="gateTitle">

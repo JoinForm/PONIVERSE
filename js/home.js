@@ -545,185 +545,6 @@ function bindGroupButtons(){
 }
 
 /* =========================
-   갤러리 (공개)
-   ========================= */
-const galleryEl = $("#gallery");
-const imgModal  = $("#imgModal");
-const modalImg  = $("#modalImg");
-
-function hideImgModal(){
-  if(!imgModal) return;
-  imgModal.setAttribute("aria-hidden", "true");
-  imgModal.setAttribute("hidden", "");
-}
-function probeImage(src){
-  return new Promise(resolve=>{
-    const im = new Image();
-    im.onload  = ()=> resolve(src);
-    im.onerror = ()=> resolve(null);
-    im.src = src + (src.includes("?") ? "&" : "?") + "v=" + Date.now();
-  });
-}
-
-let __currentPage = 1;
-const __perPage = 10;
-let __files = [];
-let __currentImageIndex = 0;   // ✅ 현재 모달에 뜬 이미지 인덱스
-
-/* ----- 기존 loadPictures를 페이지네이션 구조로 변경 ----- */
-async function loadPictures(){
-  if(!galleryEl) return;
-
-  // 1) 파일 목록(list.json) 시도
-  let files = null;
-  try{
-    const res = await fetch("image/photo/list.json", { cache:"no-cache" });
-    if(res.ok){
-      const json = await res.json();
-      if(Array.isArray(json)) files = json.map(n => "image/photo/" + n);
-    }
-  }catch{ /* ignore */ }
-
-  // 2) 폴백: sample1~12.(jpg|jpeg|png)
-  if(!files){
-    const exts = ["jpg","jpeg","png"];
-    const maxN = 30; // 필요시 더 확장 가능
-    const results = [];
-    for(let i=1;i<=maxN;i++){
-      for(const ext of exts){
-        const src = `image/photo/sample${i}.${ext}`;
-        // eslint-disable-next-line no-await-in-loop
-        const ok = await probeImage(src);
-        if(ok){ results.push(src); break; }
-      }
-    }
-    files = results;
-  }
-
-  if(!files || files.length === 0){
-    galleryEl.style.display = "none";
-    return;
-  }
-
-  __files = files;
-  renderGalleryPage(__currentPage);
-  renderPaginationControls();
-}
-
-/* ----- 페이지 렌더링 ----- */
-function renderGalleryPage(page){
-  const start = (page - 1) * __perPage;
-  const end = start + __perPage;
-  const list = __files.slice(start, end);
-
-  galleryEl.innerHTML = list.map(p => `
-    <img class="hover-zoom" src="${p}" alt="pic"
-         loading="lazy" decoding="async"
-         onerror="this.style.display='none'">
-  `).join("");
-
-  // ✅ 클릭한 이미지의 전체 인덱스를 기억해서 모달에 띄움
-  galleryEl.querySelectorAll("img").forEach((img, idx)=>{
-    const globalIndex = start + idx;   // __files 기준 인덱스
-    img.addEventListener("click", ()=>{
-      showImageAt(globalIndex);
-    });
-  });
-}
-
-
-/* ----- 페이지 버튼 렌더링 ----- */
-function renderPaginationControls(){
-  let pagEl = document.getElementById("galleryPager");
-  if(!pagEl){
-    pagEl = document.createElement("div");
-    pagEl.id = "galleryPager";
-    pagEl.className = "gallery-pager";
-    galleryEl.after(pagEl);
-  }
-
-  const totalPages = Math.ceil(__files.length / __perPage);
-  pagEl.innerHTML = Array.from({length: totalPages}, (_, i)=> i+1)
-    .map(i => `<button class="page-btn${i===__currentPage?" active":""}" data-page="${i}">${i}</button>`)
-    .join("");
-
-  pagEl.querySelectorAll("button").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      __currentPage = parseInt(btn.dataset.page, 10);
-      renderGalleryPage(__currentPage);
-      renderPaginationControls();
-      window.scrollTo({top: galleryEl.offsetTop - 100, behavior:"smooth"});
-    });
-  });
-}
-
-// ✅ 특정 인덱스 이미지 모달로 보여주기
-function showImageAt(index){
-  if (!imgModal || !modalImg || __files.length === 0) return;
-
-  // 양 끝에서 회전(마지막 다음 → 첫 번째, 첫 번째 이전 → 마지막)
-  if (index < 0) index = __files.length - 1;
-  if (index >= __files.length) index = 0;
-
-  __currentImageIndex = index;
-  modalImg.src = __files[index];
-  imgModal.removeAttribute("hidden");
-  imgModal.setAttribute("aria-hidden", "false");
-}
-
-function showNextImage(){
-  showImageAt(__currentImageIndex + 1);
-}
-
-function showPrevImage(){
-  showImageAt(__currentImageIndex - 1);
-}
-
-
-loadPictures();
-
-// 모달 닫기 (배경 클릭)
-imgModal && imgModal.addEventListener("click", e=>{
-  if(e.target === imgModal) hideImgModal();
-});
-
-// 키보드 제어: ESC / ← / →
-document.addEventListener("keydown", (e)=>{
-  // 모달이 숨겨져 있으면 무시
-  if (imgModal?.getAttribute("aria-hidden") === "true") return;
-
-  if(e.key === "Escape"){
-    hideImgModal();
-  }else if(e.key === "ArrowRight"){
-    showNextImage();
-  }else if(e.key === "ArrowLeft"){
-    showPrevImage();
-  }
-});
-
-// X 버튼
-$$("[data-close]").forEach(btn=>{
-  btn.addEventListener("click", ()=>{
-    const id = btn.getAttribute("data-close");
-    if(id === "imgModal") hideImgModal();
-  });
-});
-
-// ✅ 좌/우 네비 버튼
-const prevBtn = document.getElementById("imgPrev");
-const nextBtn = document.getElementById("imgNext");
-
-prevBtn?.addEventListener("click", (e)=>{
-  e.stopPropagation();      // 배경 클릭으로 안 인식되게
-  showPrevImage();
-});
-nextBtn?.addEventListener("click", (e)=>{
-  e.stopPropagation();
-  showNextImage();
-});
-
-
-/* =========================
    헤더 (권한별)
    ========================= */
 function setHeaderForRole(role){
@@ -732,10 +553,12 @@ function setHeaderForRole(role){
   const isAdmin = role === "manager" || role === "master";
   btnRow.innerHTML = `
     <a id="noticeBtn" class="btn primary" href="notice.html">공지사항</a>
+    <a id="albumBtn" class="btn primary" href="gallery.html">사진첩</a>
     ${isAdmin ? `<a id="manageBtn" class="btn" href="members.html">회원관리</a>` : ``}
     <a id="qaBtn" class="btn kakao" href="https://open.kakao.com/o/s24gqv1h" target="_blank" rel="noopener">1:1 문의</a>
     <button id="logoutBtn" class="btn ghost" type="button">로그아웃</button>
   `;
+
 
   $("#logoutBtn")?.addEventListener("click", async ()=>{
     try{ await signOut(auth); notify("로그아웃되었습니다."); }

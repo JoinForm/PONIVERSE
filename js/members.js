@@ -276,10 +276,19 @@ function applyFiltersAndRender() {
     list = list.filter(u => !!u.disabled);
   }
 
-  // 메인 모임별 미참석자 필터
-  if (onlyAbsent && (absentGroup === "camp" || absentGroup === "board" || absentGroup === "sport")) {
-    list = list.filter(u => isAbsentInGroup(u, absentGroup));
+  // ✅ 모임 선택 필터 (미참석 체크 여부와 무관하게 동작)
+  // - onlyAbsent OFF: 해당 모임 가입자 전체
+  // - onlyAbsent ON : 해당 모임 가입자 중 미참석자만
+  if (absentGroup === "camp" || absentGroup === "board" || absentGroup === "sport") {
+    if (onlyAbsent) {
+      // 가입했고 + 이번달 미참석
+      list = list.filter(u => isAbsentInGroup(u, absentGroup));
+    } else {
+      // 가입자 전체
+      list = list.filter(u => isJoined(u, absentGroup));
+    }
   }
+
 
   sortUsersByRoleThenJoined(list);
   renderTable(list);

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PONIVERSE – 사진첩</title>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/x-icon" href="image/icon/favicon.ico" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="PONIVERSE – 사진첩" />
+  <meta property="og:description" content="포니버스 사진첩" />
+  <meta property="og:image" content="https://joinform.github.io/PONIVERSE/image/og/og.png" />
+  <meta property="og:url" content="https://joinform.github.io/PONIVERSE/gallery.html" />
+  <meta property="og:type" content="website" />
+</head>
+
+<body class="dark-grad" data-auth="out">
+
+  <!-- Hero (home과 동일한 구조) -->
+  <header class="hero">
+    <h1 class="title-animate" id="titleText">PONIVERSE</h1>
+    <p class="subtitle">포니버스에 오신 것을 환영합니다</p>
+
+    <!-- 상단 버튼 -->
+    <div class="btn-row">
+      <a class="btn primary" href="home.html">홈으로</a>
+    </div>
+  </header>
+
+  <!-- 사진첩 -->
+  <section class="gallery" id="gallery" aria-label="사진 갤러리"></section>
+
+  <!-- 페이지네이션 -->
+  <div id="galleryPager" class="gallery-pager" aria-label="사진 페이지 이동"></div>
+
+  <!-- 이미지 확대 모달 -->
+  <div id="imgModal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-body">
+      <button class="modal-close" data-close="imgModal" aria-label="닫기" type="button">×</button>
+
+      <!-- 좌 / 우 버튼 -->
+      <button id="imgPrev" class="img-nav prev" aria-label="이전 이미지" type="button">◀</button>
+      <button id="imgNext" class="img-nav next" aria-label="다음 이미지" type="button">▶</button>
+
+      <img id="modalImg" src="" alt="확대 이미지" />
+    </div>
+  </div>
+
+  <!-- 토스트 -->
+  <div class="toast" id="toast" aria-live="polite"></div>
+
+  <!-- 사진첩 JS -->
+  <script type="module" src="js/gallery.js"></script>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <p>Author by <strong>YunHyunsue</strong></p>
+    <p>Copyright ⓒ 2025 YunHyunsue. All rights reserved.</p>
+  </footer>
+
+</body>
+</html>
