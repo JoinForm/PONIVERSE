@@ -151,6 +151,84 @@ async function loadGroupLinks(){
 }
 
 /* =========================
+   오픈채팅 비밀번호 로딩 (Firestore)
+   ========================= */
+let GROUP_PASSWORDS = { camp:"", board:"", sport:"", free:"" };
+let __pwLoaded = false;
+
+async function loadGroupPasswords(){
+  if(__pwLoaded) return;
+  __pwLoaded = true;
+
+  try{
+    const snap = await getDoc(doc(db, "config", "openchat_passwords"));
+    if(snap.exists()){
+      const d = snap.data() || {};
+      GROUP_PASSWORDS = { ...GROUP_PASSWORDS, ...d };
+    }
+  }catch(e){
+    console.warn("[openchat_passwords] load failed:", e);
+  }
+}
+
+async function copyToClipboard(text){
+  const t = String(text ?? "");
+  if(!t) return false;
+
+  if(navigator.clipboard?.writeText){
+    try{
+      await navigator.clipboard.writeText(t);
+      return true;
+    }catch{}
+  }
+
+  try{
+    const ta = document.createElement("textarea");
+    ta.value = t;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.setAttribute("readonly", "");
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return !!ok;
+  }catch{
+    return false;
+  }
+}
+
+/** ✅ 이동 전에 비번 복사 + 팝업 닫으면 이동 */
+async function openOpenChatWithPassword(groupKey, linkHref){
+  if(!linkHref || linkHref === "#"){
+    notify("오픈채팅 링크가 설정되지 않았습니다.");
+    return;
+  }
+
+  await loadGroupPasswords();
+
+  const pw = (GROUP_PASSWORDS?.[groupKey] || "").trim();
+
+  // 비번 없으면 바로 이동
+  if(!pw){
+    openLink(linkHref, { newTab: true });
+    return;
+  }
+
+  const ok = await copyToClipboard(pw);
+  if(ok){
+    alert(`참여코드 ${pw}이(가) 복사 되었습니다.\n오픈 채팅 입장 시 입력해 주세요.`);
+  }else{
+    alert(`참여코드 ${pw}을(를) 복사하지 못했습니다.\n수동으로 입력해 주세요.`);
+  }
+
+  // 팝업 닫힌 후 이동
+  openLink(linkHref, { newTab: true });
+}
+
+
+/* =========================
    안전한 링크 오픈
    ========================= */
 function openLink(link, { newTab = true } = {}) {
@@ -413,10 +491,17 @@ function bindGroupButtons(){
       const isLinkBtn = btn.matches("a.group-btn.move-btn");
       if(isLinkBtn){
         e.preventDefault();
+
         const link = btn.getAttribute("href");
-        if(link && link !== "#") openLink(link, { newTab: true });
+        const card = btn.closest(".group-card");
+        const key  = card?.dataset?.key;
+
+        if(link && link !== "#" && key){
+          await openOpenChatWithPassword(key, link);
+        }
         return;
       }
+
 
       // 참가/탈퇴/안내
       if(btn.matches(".info-btn")) return;
@@ -532,8 +617,9 @@ function bindGroupButtons(){
         refreshCountsGender();  // 칩들
 
         if (willJoin && linkHref && linkHref !== "#") {
-          openLink(linkHref, { newTab: true });
+          await openOpenChatWithPassword(key, linkHref);
         }
+
         
       }catch(err){
         console.error("toggleGroup failed:", err);
@@ -550,26 +636,36 @@ function bindGroupButtons(){
 function setHeaderForRole(role){
   const btnRow = document.querySelector(".btn-row");
   if(!btnRow) return;
+
   const isAdmin = role === "manager" || role === "master";
+
   btnRow.innerHTML = `
     <a id="noticeBtn" class="btn primary" href="notice.html">공지사항</a>
     <a id="albumBtn" class="btn primary" href="gallery.html">사진첩</a>
     ${isAdmin ? `<a id="manageBtn" class="btn" href="members.html">회원관리</a>` : ``}
+    ${isAdmin ? `<a id="codeBtn" class="btn primary" href="#" role="button">참여코드 변경</a>` : ``}
     <a id="qaBtn" class="btn kakao" href="https://open.kakao.com/o/s24gqv1h" target="_blank" rel="noopener">1:1 문의</a>
     <button id="profileBtn" class="btn ghost" type="button">정보 수정</button>
     <button id="logoutBtn" class="btn ghost" type="button">로그아웃</button>
   `;
-
 
   $("#logoutBtn")?.addEventListener("click", async ()=>{
     try{ await signOut(auth); notify("로그아웃되었습니다."); }
     catch(e){ console.error(e); notify("로그아웃 실패"); }
   });
 
-  
   bindProfileModalOnce();
   $("#profileBtn")?.addEventListener("click", openProfileModal);
+
+  // ✅ 참여코드 변경 모달 바인딩
+  bindCodeModalOnce();
+  $("#codeBtn")?.addEventListener("click", (e)=>{
+    e.preventDefault();
+    openCodeModal();
+  });
+
 }
+
 
 /* =========================
    정보 수정(프로필) 모달
@@ -681,6 +777,81 @@ function bindProfileModalOnce(){
   });
 }
 
+/* =========================
+   참여코드 변경 모달 (manager/master)
+   - Firestore: config/openchat_passwords
+   ========================= */
+
+const OPENCHAT_DOC = doc(db, "config", "openchat_passwords");
+
+// 코드 모달 열기
+async function openCodeModal(){
+  try{
+    // 최신 값 다시 로딩
+    __pwLoaded = false;
+    await loadGroupPasswords();
+
+    // input 채우기
+    $("#codeCamp").value  = GROUP_PASSWORDS.camp  || "";
+    $("#codeBoard").value = GROUP_PASSWORDS.board || "";
+    $("#codeSport").value = GROUP_PASSWORDS.sport || "";
+    $("#codeFree").value  = GROUP_PASSWORDS.free  || "";
+
+    openModal("codeModal");
+  }catch(e){
+    console.error(e);
+    notify("참여코드를 불러오지 못했습니다.");
+  }
+}
+
+// 코드 저장
+async function saveCodes(){
+  const camp  = String($("#codeCamp")?.value || "").trim();
+  const board = String($("#codeBoard")?.value || "").trim();
+  const sport = String($("#codeSport")?.value || "").trim();
+  const free  = String($("#codeFree")?.value || "").trim();
+
+  try{
+    // Firestore 저장
+    await updateDoc(OPENCHAT_DOC, {
+      camp, board, sport, free,
+      updatedAt: serverTimestamp(),
+    });
+
+    // 메모리 캐시도 즉시 갱신
+    GROUP_PASSWORDS = { ...GROUP_PASSWORDS, camp, board, sport, free };
+
+    closeModal("codeModal");
+    notify("참여코드가 저장되었습니다.");
+  }catch(e){
+    console.error(e);
+    // 권한 문제면 여기로 떨어짐 (rules)
+    notify("저장 실패(권한/규칙 확인)");
+  }
+}
+
+// 모달 이벤트 바인딩 (한 번만)
+function bindCodeModalOnce(){
+  if(window.__codeModalBound) return;
+  window.__codeModalBound = true;
+
+  $("#codeCloseBtn")?.addEventListener("click", ()=> closeModal("codeModal"));
+  $("#codeCancelBtn")?.addEventListener("click", ()=> closeModal("codeModal"));
+  $("#codeSaveBtn")?.addEventListener("click", saveCodes);
+
+  const modal = $("#codeModal");
+  modal?.addEventListener("click", (e)=>{
+    if(e.target === modal) closeModal("codeModal");
+  });
+
+  document.addEventListener("keydown", (e)=>{
+    if(e.key === "Escape" && $("#codeModal")?.getAttribute("aria-hidden") === "false"){
+      closeModal("codeModal");
+    }
+  });
+}
+
+
 
 /* =========================
    전역: 그룹 토글(DB 반영)
@@ -717,6 +888,8 @@ onAuthStateChanged(auth, async (user) => {
 
   try {
     await loadGroupLinks();
+    await loadGroupPasswords();
+
 
     const role = data?.role || "member";
     setHeaderForRole(role);
