@@ -105,59 +105,41 @@ async function recordDailyVisitOnce(){
 /* =========================
    상단 모집 상태 카운트
    ========================= */
-const LIMIT_GENDER = 10;
+const LIMIT_GENDER = 30;
 let __statusReqId = 0;
 let __refreshTimer = null;
 let __MALE_ALL_CLOSED   = false;
 let __FEMALE_ALL_CLOSED = false;
 let __ALL_FULL          = false;
 
-function groupStatus(mCount, fCount){
-  const mFull = mCount >= LIMIT_GENDER;
-  const fFull = fCount >= LIMIT_GENDER;
-  if (mFull && fFull) return "마감";
-  if (!mFull && !fFull) return "남/여 모집";
-  if (!mFull && fFull)  return "남 모집";
-  if (mFull && !fFull)  return "여 모집";
-  return "남/여 모집";
-}
-function setStatusBadge(id, status){
+function setCountBadge(id, count, limit){
   const el = document.getElementById(id);
   if (!el) return;
-  const cls =
-    status === "마감"    ? "closed" :
-    status === "남 모집" ? "male"   :
-    status === "여 모집" ? "female" : "both";
-  el.className = "status-badge " + cls;
-  el.textContent = status;
+
+  const full = count >= limit;
+  el.className = "status-badge " + (full ? "closed" : "both");
+  el.textContent = `${count} / ${limit}`;
 }
 async function refreshStatuses(){
   try{
     const reqId = ++__statusReqId;
     const usersRef = collection(db, "users");
+
     // 운영/관리자 제외: role=="member"만 카운트
-    const [
-      campM, campF, boardM, boardF, sportM, sportF
-    ] = await Promise.all([
-      getCountFromServer(query(usersRef, where("groups.camp","==",true),  where("gender","==","남"), where("role","==","member"))),
-      getCountFromServer(query(usersRef, where("groups.camp","==",true),  where("gender","==","여"), where("role","==","member"))),
-      getCountFromServer(query(usersRef, where("groups.board","==",true), where("gender","==","남"), where("role","==","member"))),
-      getCountFromServer(query(usersRef, where("groups.board","==",true), where("gender","==","여"), where("role","==","member"))),
-      getCountFromServer(query(usersRef, where("groups.sport","==",true), where("gender","==","남"), where("role","==","member"))),
-      getCountFromServer(query(usersRef, where("groups.sport","==",true), where("gender","==","여"), where("role","==","member"))),
+    const [maleSnap, femaleSnap] = await Promise.all([
+      getCountFromServer(query(usersRef, where("gender","==","남"))),
+      getCountFromServer(query(usersRef, where("gender","==","여"))),
     ]);
     if (reqId !== __statusReqId) return;
 
-    const cM = campM.data().count || 0, cF = campF.data().count || 0;
-    const bM = boardM.data().count || 0, bF = boardF.data().count || 0;
-    const sM = sportM.data().count || 0, sF = sportF.data().count || 0;
+    const m = maleSnap.data().count || 0;
+    const f = femaleSnap.data().count || 0;
 
-    setStatusBadge("st-camp",  groupStatus(cM, cF));
-    setStatusBadge("st-board", groupStatus(bM, bF));
-    setStatusBadge("st-sport", groupStatus(sM, sF));
+    setCountBadge("st-male", m, LIMIT_GENDER);
+    setCountBadge("st-female", f, LIMIT_GENDER);
 
-    __MALE_ALL_CLOSED   = (cM >= LIMIT_GENDER) && (bM >= LIMIT_GENDER) && (sM >= LIMIT_GENDER);
-    __FEMALE_ALL_CLOSED = (cF >= LIMIT_GENDER) && (bF >= LIMIT_GENDER) && (sF >= LIMIT_GENDER);
+    __MALE_ALL_CLOSED   = (m >= LIMIT_GENDER);
+    __FEMALE_ALL_CLOSED = (f >= LIMIT_GENDER);
 
     const signBtn = $("#btnSignUp");
     if (signBtn) {
@@ -170,6 +152,7 @@ async function refreshStatuses(){
     console.error("[refreshStatuses] failed:", err);
   }
 }
+
 function refreshStatusesDebounced(){
   clearTimeout(__refreshTimer);
   __refreshTimer = setTimeout(()=>refreshStatuses(), 60);

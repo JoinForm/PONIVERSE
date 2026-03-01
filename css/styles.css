@@ -652,13 +652,20 @@ h1{
    ========================= */
 .groups{
   display:none;
-  grid-template-columns:repeat(4, minmax(220px, 1fr));
   gap:16px;
   padding:24px;
   max-width:1200px;
   margin:12px auto 120px;
+
+  /* ✅ 가운데 정렬 핵심 */
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  flex-wrap:wrap;
 }
-.groups[aria-hidden="false"]{ display:grid; }
+
+/* aria-hidden 풀리면 보이게 */
+.groups[aria-hidden="false"]{ display:flex; }
 
 .group-card{
   position:relative;
@@ -668,6 +675,7 @@ h1{
   overflow:hidden;
   box-shadow:0 8px 22px rgba(0,0,0,.35);
   transition:transform .18s, box-shadow .18s;
+  width: min(360px, 100%);   /* ✅ 추가 */
 }
 .group-card:hover{
   transform:translateY(-4px);
@@ -820,7 +828,7 @@ h1{
 #groups,
 #groupsNotice,
 .page-actions{ display:none; }
-body[data-auth="in"] #groups{ display:grid; }
+body[data-auth="in"] #groups{ display:flex; }
 body[data-auth="in"] #groupsNotice{ display:block; }
 body[data-auth="in"] .page-actions{ display:flex; }
 
@@ -1108,4 +1116,3 @@ textarea{
     width: 100%;
   }
 }
-

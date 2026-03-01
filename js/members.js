@@ -93,28 +93,16 @@ function joinCell(uid, key, joined) {
 
 
 /* ✅ 참가(가입) + 출석 체크박스 묶음 셀 */
-function attCell(uid, key, joined, attended) {
-  const joinChecked = joined ? " checked" : "";
-  const attChecked  = (joined && attended) ? " checked" : "";
-  const attDisabled = joined ? "" : " disabled";
-
+/* ✅ 출석만 표시(참가 없음) */
+function attCell(uid, key, attended) {
+  const checked = attended ? " checked" : "";
   return `
-    <div class="att-cell" style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;">
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;">
-        <input type="checkbox"
-               class="join-cb"
-               data-uid="${uid}"
-               data-key="${key}"${joinChecked}>
-        <span>참가</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;">
-        <input type="checkbox"
-               class="att-cb"
-               data-uid="${uid}"
-               data-key="${key}"${attChecked}${attDisabled}>
-        <span>출석</span>
-      </label>
-    </div>
+    <label class="att-only" style="display:flex;justify-content:center;align-items:center;gap:6px;font-size:12px;">
+      <input type="checkbox"
+             class="att-cb"
+             data-uid="${uid}"
+             data-key="${key}"${checked}>
+    </label>
   `;
 }
 
@@ -203,14 +191,8 @@ onAuthStateChanged(auth, async (user) => {
     // 🔓 참석률 리셋 버튼: manager / master 둘 다 사용 가능
     if (!IS_MANAGER) {
       $("#btnResetAttendance")?.setAttribute("disabled", "disabled");
-      $("#btnResetCamp")?.setAttribute("disabled", "disabled");
-      $("#btnResetBoard")?.setAttribute("disabled", "disabled");
-      $("#btnResetSport")?.setAttribute("disabled", "disabled");
     } else {
       $("#btnResetAttendance")?.removeAttribute("disabled");
-      $("#btnResetCamp")?.removeAttribute("disabled");
-      $("#btnResetBoard")?.removeAttribute("disabled");
-      $("#btnResetSport")?.removeAttribute("disabled");
     }
 
     await loadMembers();
@@ -223,7 +205,6 @@ onAuthStateChanged(auth, async (user) => {
 
 /* ============ 캐시 & 필터 ============ */
 let CACHE = []; // 전체 회원 캐시(화면 변경 내용 포함)
-let MODE  = "att"; // "att" = 출석 모드(기본), "join" = 참가 관리 모드
 
 function matchesTerm(u, term) {
   if (!term) return true;
@@ -259,9 +240,9 @@ function matchesTerm(u, term) {
  * - 해당 모임에 가입했으나 출석이 한 번도 안 찍힌 유저
  */
 function isAbsentInGroup(u, key) {
-  if (!(key === "camp" || key === "board" || key === "sport")) return false;
-  if (!isJoined(u, key)) return false;
-  return !isAttended(u, key);
+  if (key !== "free") return false;        // ✅ free만
+  if (!isJoined(u, "free")) return false;  // ✅ 자유 참가자만 대상
+  return !isAttended(u, "free");           // ✅ 해당 월 자유 출석이 false면 미참석
 }
 
 function applyFiltersAndRender() {
@@ -279,14 +260,8 @@ function applyFiltersAndRender() {
   // ✅ 모임 선택 필터 (미참석 체크 여부와 무관하게 동작)
   // - onlyAbsent OFF: 해당 모임 가입자 전체
   // - onlyAbsent ON : 해당 모임 가입자 중 미참석자만
-  if (absentGroup === "camp" || absentGroup === "board" || absentGroup === "sport") {
-    if (onlyAbsent) {
-      // 가입했고 + 이번달 미참석
-      list = list.filter(u => isAbsentInGroup(u, absentGroup));
-    } else {
-      // 가입자 전체
-      list = list.filter(u => isJoined(u, absentGroup));
-    }
+  if (onlyAbsent) {
+    list = list.filter(u => isAbsentInGroup(u, "free"));
   }
 
 
@@ -297,7 +272,7 @@ function applyFiltersAndRender() {
 /* ============ 데이터 로드/렌더 ============ */
 async function loadMembers() {
   const body = $("#membersBody");
-  if (body) body.innerHTML = '<tr><td colspan="12">로딩 중…</td></tr>'; // 12컬럼
+  if (body) body.innerHTML = '<tr><td colspan="9">로딩 중…</td></tr>'; // 9컬럼
 
   const monthId = CURRENT_MONTH_ID;   // 🔹 현재 선택된 월
 
@@ -319,11 +294,7 @@ async function loadMembers() {
     );
     attSnap.forEach(docSnap => {
       const d = docSnap.data();
-      ATT_MONTH[d.uid] = {
-        camp:  !!d.camp,
-        board: !!d.board,
-        sport: !!d.sport,
-      };
+      ATT_MONTH[d.uid] = { free: !!d.free };
     });
   } catch (e) {
     console.error("[attendance_monthly load failed]", e);
@@ -350,9 +321,6 @@ function renderRow(u, idx = 0) {
   const isMe = u.id === auth.currentUser?.uid;
 
   const joined = {
-    camp:  isJoined(u, "camp"),
-    board: isJoined(u, "board"),
-    sport: isJoined(u, "sport"),
     free:  isJoined(u, "free")
   };
   const att = ATT_MONTH[u.id] || {};
@@ -387,22 +355,15 @@ function renderRow(u, idx = 0) {
   ));
 
 
-  // ✅ 모드에 따라 셀 내용 변경
-  if (MODE === "join") {
-    tr.appendChild(td("col-att", joinCell(u.id, "camp",  joined.camp)));
-    tr.appendChild(td("col-att", joinCell(u.id, "board", joined.board)));
-    tr.appendChild(td("col-att", joinCell(u.id, "sport", joined.sport)));
-    tr.appendChild(td("col-att", joinCell(u.id, "free",  joined.free))); // ✅ 추가
-  } else {
-    // 출석 모드(기본): 자유는 계속 제외
-    tr.appendChild(td("col-att", joined.camp  ? cb(u.id, "camp",  !!att.camp)  : "–"));
-    tr.appendChild(td("col-att", joined.board ? cb(u.id, "board", !!att.board) : "–"));
-    tr.appendChild(td("col-att", joined.sport ? cb(u.id, "sport", !!att.sport) : "–"));
-    tr.appendChild(td("col-att", "–")); // ✅ 출석모드에서도 컬럼 수 맞추기(자유는 항상 –)
-  }
+  const freeJoined = isJoined(u, "free");
+  const freeAtt = !!(ATT_MONTH[u.id]?.free);
 
-
-
+  tr.appendChild(
+    td(
+      "col-att",
+      freeJoined ? attCell(u.id, "free", freeAtt) : '<span class="dash">-</span>'
+    )
+  );
 
   const created = u.createdAt || u.created_at || null;
   tr.appendChild(td("col-created", created ? escapeHtml(fmtDate(created)) : "-"));
@@ -443,67 +404,25 @@ function renderRow(u, idx = 0) {
   });
 
 
-  // ✅ 모드별 이벤트 바인딩
-  if (MODE === "join") {
-    // ─ 참가 관리 모드: groups.camp/board/sport 강제 참가/탈퇴 ─
-    tr.querySelectorAll(".join-cb").forEach(joinEl => {
-      joinEl.addEventListener("change", async () => {
-        const uid  = joinEl.dataset.uid;
-        const key  = joinEl.dataset.key;   // camp / board / sport
-        const join = joinEl.checked;
+  // ✅ 출석 체크 이벤트 (MODE 없이)
+  tr.querySelectorAll(".att-cb").forEach(cbEl => {
+    cbEl.addEventListener("change", async () => {
+      const uid  = cbEl.dataset.uid;
+      const key  = cbEl.dataset.key;
+      if (key !== "free") return;
 
-        try {
-          const upd = {
-            ["groups." + key]: join,
-            updatedAt: serverTimestamp()
-          };
-          // 탈퇴시키는 경우 해당 모임 출석도 같이 false로 정리
-          if (!join) {
-            upd["attendance." + key] = false;
-          }
+      const next = cbEl.checked;
 
-          await updateDoc(doc(db, "users", uid), upd);
-
-          // 캐시 갱신
-          const idx = CACHE.findIndex(x => x.id === uid);
-          if (idx >= 0) {
-            const g = { ...(CACHE[idx].groups || {}) };
-            g[key] = join;
-            const a = { ...(CACHE[idx].attendance || {}) };
-            if (!join) a[key] = false;
-            CACHE[idx] = { ...CACHE[idx], groups: g, attendance: a };
-          }
-
-          notify(join ? "모임에 참가 처리되었습니다." : "모임에서 탈퇴 처리되었습니다.");
-        } catch (e) {
-          console.error(e);
-          notify("모임 참가/탈퇴 저장 실패");
-          // 실패 시 UI 롤백
-          joinEl.checked = !join;
-        }
-      });
+      try {
+        await saveMonthlyAttendance(uid, key, next);
+        notify("출석 상태 저장됨");
+      } catch (e) {
+        console.error(e);
+        notify("저장 실패");
+        cbEl.checked = !next;
+      }
     });
-
-  } else {
-    // ─ 출석 모드: 선택한 월의 attendance_monthly 에 저장 ─
-    tr.querySelectorAll(".att-cb").forEach(cbEl => {
-      cbEl.addEventListener("change", async () => {
-        const uid  = cbEl.dataset.uid;
-        const key  = cbEl.dataset.key; // camp/board/sport
-        const next = cbEl.checked;
-
-        try {
-          // 🔹 월별 출석 컬렉션에 저장
-          await saveMonthlyAttendance(uid, key, next);
-          notify("출석 상태 저장됨");
-        } catch (e) {
-          console.error(e);
-          notify("저장 실패");
-          cbEl.checked = !next;   // 실패 시 UI 롤백
-        }
-      });
-    });
-  }
+  });
 
 
 
@@ -713,63 +632,38 @@ async function saveMonthlyAttendance(uid, groupKey, value) {
 
 
 /* ============ 참석률 리셋: 메인 모임별 ============ */
-async function resetAttendance(groupKey) {
+async function resetAttendance() {
   if (!IS_MANAGER) {
     notify("매니저 이상만 가능합니다.");
     return;
   }
 
-  // groupKey: "camp" | "board" | "sport" | "all"
-  const labels = {
-    camp: "캠핑",
-    board: "보드게임",
-    sport: "운동",
-    all: "캠핑/보드게임/운동 전체"
-  };
-
-  let targetFields;
-  let key = groupKey;
-
-  if (key === "camp" || key === "board" || key === "sport") {
-    targetFields = [key];
-  } else {
-    key = "all";
-    targetFields = ["camp", "board", "sport"];
-  }
-
-  const msg = `${CURRENT_MONTH_ID} 월의 ${labels[key]} 참석 상태를 ‘미참석’으로 초기화합니다.\n\n진행하시겠습니까?`;
+  const msg = `${CURRENT_MONTH_ID} 월의 자유 출석 상태를 ‘미참석’으로 초기화합니다.\n\n진행하시겠습니까?`;
   if (!confirm(msg)) return;
 
   try {
     const monthId = CURRENT_MONTH_ID;
 
-    // 1) 해당 월 출석 문서들만 가져오기
+    // 해당 월 문서들만 가져오기
     const snap = await getDocs(
-      query(
-        collection(db, "attendance_monthly"),
-        where("monthId", "==", monthId)
-      )
+      query(collection(db, "attendance_monthly"), where("monthId", "==", monthId))
     );
 
     const batch = writeBatch(db);
 
     snap.forEach(d => {
-      const upd = { updatedAt: serverTimestamp() };
-      targetFields.forEach(f => {
-        upd[f] = false;    // camp/board/sport 필드를 false로
-      });
-      batch.update(d.ref, upd);
+      batch.set(
+        d.ref,
+        { free: false, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
     });
 
     await batch.commit();
 
-    // 2) 로컬 캐시 ATT_MONTH 갱신
+    // 로컬 캐시 갱신
     ATT_MONTH = Object.fromEntries(
-      Object.entries(ATT_MONTH).map(([uid, att]) => {
-        const nextAtt = { ...(att || {}) };
-        targetFields.forEach(f => { nextAtt[f] = false; });
-        return [uid, nextAtt];
-      })
+      Object.entries(ATT_MONTH).map(([uid, att]) => [uid, { ...(att || {}), free: false }])
     );
 
     applyFiltersAndRender();
@@ -786,33 +680,16 @@ function bindControls() {
   $("#searchInput")?.addEventListener("input", applyFiltersAndRender);
 
   $("#onlyNeverAttended")?.addEventListener("change", applyFiltersAndRender);
-  $("#absentFilter")?.addEventListener("change", applyFiltersAndRender);
 
   $("#onlyDisabled")?.addEventListener("change", applyFiltersAndRender);
 
   $("#refreshBtn")?.addEventListener("click", () => loadMembers());
   $("#refreshBtn2")?.addEventListener("click", () => loadMembers());
 
-  $("#btnResetAttendance")?.addEventListener("click", () => resetAttendance("all"));
-  $("#btnResetCamp")?.addEventListener("click", () => resetAttendance("camp"));
-  $("#btnResetBoard")?.addEventListener("click", () => resetAttendance("board"));
-  $("#btnResetSport")?.addEventListener("click", () => resetAttendance("sport"));
+  $("#btnResetAttendance")?.addEventListener("click", () => resetAttendance());
 
-  // 🔀 모드 전환: 출석 / 참가 관리
-  $("#modeAttendance")?.addEventListener("change", (e) => {
-    if (e.target.checked) {
-      MODE = "att";
-      applyFiltersAndRender();   // 현재 필터 기준으로 다시 렌더
-      notify("출석 모드");
-    }
-  });
-  $("#modeJoin")?.addEventListener("change", (e) => {
-    if (e.target.checked) {
-      MODE = "join";
-      applyFiltersAndRender();
-      notify("참가 관리 모드");
-    }
-  });
+
+
   
   // 🔹 월 선택 컨트롤 바인딩
   const monthInput = $("#monthInput");

@@ -191,37 +191,13 @@
         <!-- ✅ 필터/모드 묶음 칩 -->
         <div class="filter-chip-group">
           <label>
-            <input type="checkbox" id="onlyNeverAttended">
-            <span>미참석자만</span>
-          </label>
-
-          <label>
-            <span class="sr-only">미참석자 모임 선택</span>
-            <select id="absentFilter">
-              <option value="">전체</option>
-              <option value="camp">캠핑</option>
-              <option value="board">보드게임</option>
-              <option value="sport">운동</option>
-            </select>
-          </label>
-
-          <label>
             <input type="checkbox" id="onlyDisabled">
             <span>비활성화 계정만</span>
           </label>
-
-          <!-- 모드 전환 -->
-          <div class="mode-chip">
-            <span>모드:</span>
-            <label>
-              <input type="radio" name="mode" id="modeAttendance" value="att" checked>
-              <span>출석</span>
-            </label>
-            <label>
-              <input type="radio" name="mode" id="modeJoin" value="join">
-              <span>참가 관리</span>
-            </label>
-          </div>
+          <label>
+            <input type="checkbox" id="onlyNeverAttended">
+            <span>미참석자만</span>
+          </label>
         </div>
       </div>
 
@@ -236,15 +212,11 @@
           <button id="nextMonth" type="button" class="btn ghost" style="padding:4px 10px;font-size:13px;">▶</button>
         </div>
         <!-- 🔹 월 선택 바 추가 (여기 끝) -->
-        <!-- 메인 모임별 출석 리셋: 모두 기본 .btn -->
-        <button id="btnResetCamp"  class="btn" type="button" title="캠핑 참석을 모두 미참석으로 초기화">캠핑 출석 리셋</button>
-        <button id="btnResetBoard" class="btn" type="button" title="보드게임 참석을 모두 미참석으로 초기화">보드 출석 리셋</button>
-        <button id="btnResetSport" class="btn" type="button" title="운동 참석을 모두 미참석으로 초기화">운동 출석 리셋</button>
 
         <!-- 전체(캠/보/운) 출석 리셋: 색만 danger -->
         <button id="btnResetAttendance" class="btn danger" type="button"
-                title="캠핑/보드게임/운동 참석을 모두 미참석으로 초기화">
-          전체 출석 리셋
+                title="참석을 모두 미참석으로 초기화">
+          전체 참가 리셋
         </button>
 
         <button id="refreshBtn2" class="btn" type="button">새로고침</button>
@@ -262,7 +234,7 @@
           <col class="col-phone">
           <col class="col-region">
           <col class="col-role">
-          <col class="col-att"><col class="col-att"><col class="col-att"><col class="col-att">
+          <col class="col-att">   <!-- 자유 참가 -->
           <col class="col-created">
           <col class="col-ops">
         </colgroup>
@@ -270,27 +242,21 @@
 
         <thead>
           <tr>
-            <th class="col-idx"    rowspan="2">번호</th>
-            <th class="col-name"   rowspan="2">이름</th>
-            <th class="col-gy"     rowspan="2">성별/년도</th>
-            <th class="col-phone"  rowspan="2">연락처</th>
-            <th class="col-region" rowspan="2">지역</th>
-            <th class="col-role"   rowspan="2">권한</th>
-            <th colspan="4">참가(출석)</th>
-            <th class="col-created" rowspan="2">생성</th>
-            <th class="col-ops"     rowspan="2">작업</th>
-          </tr>
-          <tr class="group-head">
-            <th>캠핑</th>
-            <th>보드게임</th>
-            <th>운동</th>
-            <th>자유</th>
+            <th class="col-idx">번호</th>
+            <th class="col-name">이름</th>
+            <th class="col-gy">성별/년도</th>
+            <th class="col-phone">연락처</th>
+            <th class="col-region">지역</th>
+            <th class="col-role">권한</th>
+            <th>참가유무</th>
+            <th class="col-created">생성</th>
+            <th class="col-ops">작업</th>
           </tr>
         </thead>
 
         <tbody id="membersBody">
-          <!-- 전체 컬럼 수: 12개 -->
-          <tr><td colspan="12">로딩 중…</td></tr>
+          <!-- 전체 컬럼 수: 9개 -->
+          <tr><td colspan="9">로딩 중…</td></tr>
         </tbody>
       </table>
     </div>

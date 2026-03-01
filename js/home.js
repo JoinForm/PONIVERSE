@@ -14,7 +14,7 @@ import {
   setPersistence, browserLocalPersistence, updateProfile
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, updateDoc, serverTimestamp,
+  getFirestore, doc, getDoc, getDocs, updateDoc, serverTimestamp,
   collection, query, where, getCountFromServer, deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
 
@@ -30,7 +30,6 @@ const firebaseConfig = {
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
-const ROLE_MEMBER_FILTER = where("role", "==", "member");
 
 // 로그인 상태 유지(Local)
 await setPersistence(auth, browserLocalPersistence);
@@ -153,7 +152,7 @@ async function loadGroupLinks(){
 /* =========================
    오픈채팅 비밀번호 로딩 (Firestore)
    ========================= */
-let GROUP_PASSWORDS = { camp:"", board:"", sport:"", free:"" };
+let GROUP_PASSWORDS = { free:"" };
 let __pwLoaded = false;
 
 async function loadGroupPasswords(){
@@ -267,7 +266,6 @@ function setCountText(el, val, limit = LIMIT_TOTAL){
 
 async function refreshCounts(){
   try{
-    // 상단 카운트 DOM이 없는 페이지면 스킵
     const need = $("#c1") || $("#c2") || $("#c3");
     if(!need) return;
 
@@ -275,9 +273,9 @@ async function refreshCounts(){
     const reqId = ++__countReqId;
 
     const [campSnap, boardSnap, sportSnap] = await Promise.all([
-      getCountFromServer(query(usersRef, where("groups.camp",  "==", true), ROLE_MEMBER_FILTER)),
-      getCountFromServer(query(usersRef, where("groups.board", "==", true), ROLE_MEMBER_FILTER)),
-      getCountFromServer(query(usersRef, where("groups.sport", "==", true), ROLE_MEMBER_FILTER)),
+      getCountFromServer(query(usersRef, where("groups.camp",  "==", true))),
+      getCountFromServer(query(usersRef, where("groups.board", "==", true))),
+      getCountFromServer(query(usersRef, where("groups.sport", "==", true))),
     ]);
 
     if(reqId !== __countReqId) return;
@@ -296,6 +294,7 @@ async function refreshCounts(){
     console.error("[refreshCounts] failed:", err);
   }
 }
+
 function refreshCountsDebounced(){
   clearTimeout(__refreshTimer);
   __refreshTimer = setTimeout(()=>refreshCounts(), 60);
@@ -318,7 +317,6 @@ async function isGenderFull(groupKey, gender){
       query(
         usersRef,
         where(`groups.${groupKey}`, "==", true),
-        ROLE_MEMBER_FILTER,
         where("gender", "==", gender)
       )
     );
@@ -347,41 +345,13 @@ async function refreshCountsGender(){
     const usersRef = collection(db, "users");
     const reqId = ++__gReqId;
 
-    // 남/여 × (캠핑/보드/운동/자유)
-    const [
-      campM,  campF,
-      boardM, boardF,
-      sportM, sportF,
-      freeM,  freeF
-    ] = await Promise.all([
-      getCountFromServer(query(usersRef, where("groups.camp",  "==", true), ROLE_MEMBER_FILTER, where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.camp",  "==", true), ROLE_MEMBER_FILTER, where("gender","==","여"))),
-      getCountFromServer(query(usersRef, where("groups.board", "==", true), ROLE_MEMBER_FILTER, where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.board", "==", true), ROLE_MEMBER_FILTER, where("gender","==","여"))),
-      getCountFromServer(query(usersRef, where("groups.sport", "==", true), ROLE_MEMBER_FILTER, where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.sport", "==", true), ROLE_MEMBER_FILTER, where("gender","==","여"))),
-      getCountFromServer(query(usersRef, where("groups.free",  "==", true), ROLE_MEMBER_FILTER, where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("groups.free",  "==", true), ROLE_MEMBER_FILTER, where("gender","==","여"))),
+    const [freeM, freeF] = await Promise.all([
+      getCountFromServer(query(usersRef, where("groups.free","==", true), where("gender","==","남"))),
+      getCountFromServer(query(usersRef, where("groups.free","==", true), where("gender","==","여"))),
     ]);
 
-    if(reqId !== __gReqId) return;
-
-    const cM = campM.data().count  || 0;
-    const cF = campF.data().count  || 0;
-    const bM = boardM.data().count || 0;
-    const bF = boardF.data().count || 0;
-    const sM = sportM.data().count || 0;
-    const sF = sportF.data().count || 0;
-    const fM = freeM.data().count  || 0;
-    const fF = freeF.data().count  || 0;
-
-    // 카드 칩 채우기(캠/보/운: 정원 10, 자유: 정원 없음)
-    setChip(document.getElementById("chip-camp-m"),  "남", cM);
-    setChip(document.getElementById("chip-camp-f"),  "여", cF);
-    setChip(document.getElementById("chip-board-m"), "남", bM);
-    setChip(document.getElementById("chip-board-f"), "여", bF);
-    setChip(document.getElementById("chip-sport-m"), "남", sM);
-    setChip(document.getElementById("chip-sport-f"), "여", sF);
+    const fM = freeM.data().count || 0;
+    const fF = freeF.data().count || 0;
 
     setChipFree(document.getElementById("chip-free-m"), "남", fM);
     setChipFree(document.getElementById("chip-free-f"), "여", fF);
@@ -413,10 +383,7 @@ function renderGroups(joinedSet){
   if(!groupsEl) return;
 
   const items = [
-    { key:"camp",  title:"캠핑",    img:"image/meeting/sample1.png" },
-    { key:"board", title:"보드게임", img:"image/meeting/sample2.png" },
-    { key:"sport", title:"운동",    img:"image/meeting/sample3.png" },
-    { key:"free",  title:"자유",    img:"image/meeting/sample4.png" },
+    { key:"free",  title:"PONIVERSE",    img:"image/meeting/sample4.png" },
   ];
 
   groupsEl.innerHTML = items.map(it=>{
@@ -427,8 +394,8 @@ function renderGroups(joinedSet){
     // 자유에도 칩 추가 (표기만 n명, full 강조 없음)
     const chips = `
       <div class="gender-chips" aria-label="${it.title} 성별 인원">
-        <span id="chip-${it.key}-m" class="chip male"><span class="lbl">남</span><span class="val">0${it.key==="free" ? "명" : "/10"}</span></span>
-        <span id="chip-${it.key}-f" class="chip female"><span class="lbl">여</span><span class="val">0${it.key==="free" ? "명" : "/10"}</span></span>
+        <span id="chip-free-m" class="chip male"><span class="lbl">남</span><span class="val">0명</span></span>
+        <span id="chip-free-f" class="chip female"><span class="lbl">여</span><span class="val">0명</span></span>
       </div>
     `;
 
@@ -517,44 +484,6 @@ function bindGroupButtons(){
 
       const isWithdraw = btn.classList.contains("withdraw-btn");
       const willJoin   = !isWithdraw;
-
-      // ---- '자유' 참가 전 조건: 캠/보/운 중 1개 이상 가입되어 있어야 함 ----
-      if (willJoin && key === "free") {
-        const hasOne = Array.from(groupsEl.querySelectorAll(".group-card")).some(el => {
-          const k = el.dataset.key;
-          return (k === "camp" || k === "board" || k === "sport") && el.getAttribute("data-joined") === "true";
-        });
-        if (!hasOne) {
-          notify("캠핑/보드게임/운동 중 1개 이상 먼저 가입한 뒤 자유 모임에 참가할 수 있어요.");
-          return; // 참가 처리 중단
-        }
-      }
-
-      // camp/board/sport 최소 1개 유지
-      if(!willJoin && (key==="camp"||key==="board"||key==="sport")){
-        const joinedOthers = Array.from(groupsEl.querySelectorAll(".group-card")).some(cardEl=>{
-          const k = cardEl.dataset.key;
-          if(k===key) return false;
-          if(!(k==="camp"||k==="board"||k==="sport")) return false;
-          return cardEl.getAttribute("data-joined") === "true";
-        });
-        if(!joinedOthers){
-          notify("캠핑/보드게임/운동 중 최소 1개는 선택되어 있어야 합니다.");
-          return;
-        }
-      }
-
-      // ---- 성별 정원 체크 (join 시) ----
-      if (willJoin) {
-        const myGender = window.__userGender; // "남" 또는 "여"
-        if (key === "camp" || key === "board" || key === "sport") {
-          const full = await isGenderFull(key, myGender);
-          if (full) {
-            notify(`${title}의 ${myGender ?? ""} 정원이 마감되었습니다.`);
-            return; // 참가 처리 중단 (UI 변경 없음)
-          }
-        }
-      }
 
       // ===== UI 즉시 반영
       const statusBadge = card.querySelector(".badge.status");
@@ -792,9 +721,6 @@ async function openCodeModal(){
     await loadGroupPasswords();
 
     // input 채우기
-    $("#codeCamp").value  = GROUP_PASSWORDS.camp  || "";
-    $("#codeBoard").value = GROUP_PASSWORDS.board || "";
-    $("#codeSport").value = GROUP_PASSWORDS.sport || "";
     $("#codeFree").value  = GROUP_PASSWORDS.free  || "";
 
     openModal("codeModal");
@@ -806,20 +732,16 @@ async function openCodeModal(){
 
 // 코드 저장
 async function saveCodes(){
-  const camp  = String($("#codeCamp")?.value || "").trim();
-  const board = String($("#codeBoard")?.value || "").trim();
-  const sport = String($("#codeSport")?.value || "").trim();
   const free  = String($("#codeFree")?.value || "").trim();
 
   try{
     // Firestore 저장
     await updateDoc(OPENCHAT_DOC, {
-      camp, board, sport, free,
+      free,
       updatedAt: serverTimestamp(),
     });
 
-    // 메모리 캐시도 즉시 갱신
-    GROUP_PASSWORDS = { ...GROUP_PASSWORDS, camp, board, sport, free };
+    GROUP_PASSWORDS = { ...GROUP_PASSWORDS, free };
 
     closeModal("codeModal");
     notify("참여코드가 저장되었습니다.");
@@ -926,7 +848,7 @@ onAuthStateChanged(auth, async (user) => {
   $(".page-actions")?.setAttribute("aria-hidden", "false");
   if ($("#groupsNotice")) {
     $("#groupsNotice").textContent =
-      "원활한 회원 관리를 위해 실제로 참여 중인 모임에만 ‘참가하기’ 버튼을 눌러 주세요.";
+      "원활한 회원 관리를 위해 ‘참가하기’ 버튼을 눌려 모임에 참가해 주세요.";
   }
 });
 

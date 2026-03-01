@@ -16,8 +16,8 @@ function groupTitle(g) {
       camp: "캠핑",
       board: "보드게임",
       sport: "운동",
-      free: "자유",
-    }[g] || "모임"
+      free: "",
+    }[g] || "PONIVERSE"
   );
 }
 
