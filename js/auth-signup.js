@@ -11,30 +11,26 @@ import {
 
 import { signOut } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 
-
-const LIMIT_GENDER = 10;
-const groupKeys = ["camp","board","sport"];
+const LIMIT_GENDER = 30;
+const TARGET_GROUP = "free";
 
 // ────────────────────────────────────────
-//  세 모임 모두 특정 성별이 마감인지 확인
+//  자유 모임에서 특정 성별이 마감(30명 이상)인지 확인
 // ────────────────────────────────────────
-async function isGenderAllClosed(gender){
+async function isGenderClosed(gender){
   try{
-    const snaps = await Promise.all(
-      groupKeys.map(k =>
-        getDocs(
-          query(
-            collection(db, "users"),
-            where(`groups.${k}`, "==", true),
-            where("gender", "==", gender),
-            where("role", "==", "member") // ✅ 운영진 제외
-          )
-        )
+    const snap = await getDocs(
+      query(
+        collection(db, "users"),
+        where(`groups.${TARGET_GROUP}`, "==", true),
+        where("gender", "==", gender),
+        where("role", "==", "member")
       )
     );
-    return snaps.every(s => (s.size || 0) >= LIMIT_GENDER);
+
+    return (snap.size || 0) >= LIMIT_GENDER;
   }catch(e){
-    console.error("[isGenderAllClosed] failed:", e);
+    console.error("[isGenderClosed] failed:", e);
     return false;
   }
 }
@@ -277,7 +273,7 @@ if (form) {
       const genderChosen = gender;
 
       // 항상 DB 기준으로 최종 확인
-      const reallyClosed = await isGenderAllClosed(genderChosen);
+      const reallyClosed = await isGenderClosed(genderChosen);
 
       // 캐시 갱신(다음 페이지/다음 시도에 UI에서 참고 가능)
       sessionStorage.setItem(
@@ -290,7 +286,7 @@ if (form) {
           submitBtn.disabled = false;
           submitBtn.textContent = "가입하기";
         }
-        showMsg(`현재 ${genderChosen} 회원은(는) 모든 모임이 마감되어 가입이 제한됩니다.`);
+        showMsg(`현재 자유모임 ${genderChosen} 회원 정원이 마감되어 가입이 제한됩니다.`);
         return;
       }
 
@@ -354,8 +350,8 @@ if (form) {
         phone,
         phoneDigits,
         role: "member",
-        groups: { camp:false, board:false, sport:false, free:false },
-        attendance: { camp:false, board:false, sport:false, free:false },
+        groups: { free:false },
+        attendance: { free:false },
         agreedPrivacy: true,
         privacyAgreedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
@@ -410,16 +406,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 2) 캐시가 true면 "혹시 풀렸나" 재검증
   //    캐시가 false여도 최신화를 위해 재검증하고 싶으면 둘 다 재검증해도 됨
-  const [mAll, fAll] = await Promise.all([
-    isGenderAllClosed("남"),
-    isGenderAllClosed("여"),
+  const [mClosed, fClosed] = await Promise.all([
+    isGenderClosed("남"),
+    isGenderClosed("여"),
   ]);
 
-  disableOpt("남", mAll);
-  disableOpt("여", fAll);
+  disableOpt("남", mClosed);
+  disableOpt("여", fClosed);
 
-  sessionStorage.setItem("__MALE_ALL_CLOSED", JSON.stringify(mAll));
-  sessionStorage.setItem("__FEMALE_ALL_CLOSED", JSON.stringify(fAll));
+  sessionStorage.setItem("__MALE_ALL_CLOSED", JSON.stringify(mClosed));
+  sessionStorage.setItem("__FEMALE_ALL_CLOSED", JSON.stringify(fClosed));
 });
 
 
