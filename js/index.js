@@ -127,9 +127,17 @@ async function refreshStatuses(){
 
     // 운영/관리자 제외: role=="member"만 카운트
     const [maleSnap, femaleSnap] = await Promise.all([
-      getCountFromServer(query(usersRef, where("gender","==","남"))),
-      getCountFromServer(query(usersRef, where("gender","==","여"))),
-    ]);
+  getCountFromServer(query(
+    usersRef,
+    where("groups.free","==", true),
+    where("gender","==","남"),
+  )),
+  getCountFromServer(query(
+    usersRef,
+    where("groups.free","==", true),
+    where("gender","==","여"),
+  )),
+]);
     if (reqId !== __statusReqId) return;
 
     const m = maleSnap.data().count || 0;

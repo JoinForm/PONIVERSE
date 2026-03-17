@@ -24,7 +24,6 @@ async function isGenderClosed(gender){
         collection(db, "users"),
         where(`groups.${TARGET_GROUP}`, "==", true),
         where("gender", "==", gender),
-        where("role", "==", "member")
       )
     );
 
